@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+data/raw/*.json
+data/images/*.png
+data/images/*.jpg
+*.joblib
+.pytest_cache/
+.DS_Store
