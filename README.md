@@ -6,3 +6,4 @@
 ## 진행 로그
 - Day 1 (07-21): 프로젝트 셋업, requirements.txt, 폴더 구조
 - Day 2 (07-22): pubg_client.py (매치 리스트 조회 + 429 backoff)
+- Day 3 (07-23): download_telemetry.py (텔레메트리 원본 JSON 다운로드, data/raw/)
