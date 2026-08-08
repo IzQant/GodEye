@@ -1,0 +1,42 @@
+# 로컬 개발용 Docker Compose (Day 8).
+# 지금은 DB(Postgres)만 띄운다. 완료 기준: docker compose up으로 DB 컨테이너 정상 기동.
+#
+# 앱(app) 서비스는 Dockerfile이 필요한 Week 6 배포 단계에서 주석을 풀어 함께 띄운다.
+# 지금 단계에서는 FastAPI는 로컬에서 uvicorn으로 직접 실행하고, DB만 컨테이너로 쓴다.
+#
+# 실행:  docker compose up -d
+# 종료:  docker compose down
+# 접속:  postgresql://pubg:pubg@localhost:5432/pubg_zone
+#
+# 참고: 최신 Docker Compose는 최상단 version 키가 불필요(obsolete)하여 제거함.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: pubg
+      POSTGRES_PASSWORD: pubg
+      POSTGRES_DB: pubg_zone
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # DB가 실제로 접속 가능한 상태인지 확인하는 헬스체크
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pubg -d pubg_zone"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- Week 6 배포 단계에서 활성화 (Dockerfile 작성 후) ---
+  # app:
+  #   build: .
+  #   env_file: .env
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   ports:
+  #     - "8000:8000"
+
+volumes:
+  pgdata:
