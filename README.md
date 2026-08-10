@@ -60,3 +60,12 @@ uvicorn app.main:app --reload   # http://127.0.0.1:8000/health
 - Day 12 (08-01): baseline_model.py (규칙 기반 다음 원 추정기, phase_stats.json 사용)
 - Day 13 (08-02): evaluate.py (매치 단위 train/test, 오차(m) 측정 → baseline_eval.md)
 - Day 14 (08-03): run_pipeline.py (통합→통계→평가 한 번에 실행), README 결과 정리, 주간 회고 [v0.2]
+
+### Week 3 (08-04 ~ 08-10) — 모델 고도화 + 예측 API
+- Day 15 (08-04): train_regression.py (RandomForest 다음 원 예측, 56매치). 발견: 절대좌표 목표에선 copy-baseline이 더 강함 → Day 18에서 이동량(delta) 목표로 재구성 예정
+- Day 16 (08-05): gaussian_model.py (이동량 2D 가우시안 근사 + 신뢰구간 반경, delta 프레이밍 적용)
+- Day 17 (08-06, 선택): train_mlp.py (PyTorch MLP, 이동량 목표, 오차 평균 10.8m). Day 18에서 전 모델 동일 프레이밍 공정 비교 예정
+- Day 18 (08-07): compare_models.py (4모델 공정 비교 + 지도 시각화). 최종 모델 RF(delta) 선정 (Copy 대비 마진 작음). → model_comparison.md
+- Day 19 (08-08): train_final.py (최종 모델 joblib 직렬화), model_service.py (1회 로드 캐시 + 맵별 폴백 확장 여지)
+- Day 20 (08-09): /api/predict 실구현 (match_service로 현재 원 추출 → 모델 추론 → JSON). 실 matchId 200 / 오류 matchId 404 확인
+- Day 21 (08-10): pytest 7개(단위4+통합3) 통과, 예외처리(404/422/503), 주간 회고 [v0.3]

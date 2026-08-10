@@ -1,25 +1,44 @@
 """
-/api/predict 라우터 스켈레톤 (Day 10).
+/api/predict 라우터 (Day 20: 실구현).
 
-지금은 실제 예측 로직이 없다. 입력을 받아 형태만 맞춘 더미 응답을 돌려주고,
-Swagger(/docs)에 엔드포인트가 등록되는 것까지가 오늘 목표.
-실제 모델 연결은 Week 3(Day 20)에서 채운다.
+흐름: matchId → 현재 원 추출(match_service) → 모델 추론(model_service)
+      → 다음 원 중심·반경·신뢰구간 JSON 응답.
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.schemas import Circle, PredictRequest, PredictResponse
+from app.services.match_service import MatchNotFoundError, get_current_circle
+from app.services.model_service import get_predictor
 
 router = APIRouter(tags=["predict"])
 
 
 @router.post("/predict", response_model=PredictResponse)
 def predict_next_circle(req: PredictRequest):
-    """matchId를 받아 다음 자기장을 예측한다. (현재는 더미 응답)"""
-    # TODO(Week 3): matchId로 텔레메트리/DB 조회 → 특징 추출 → 모델 추론
+    """matchId를 받아 다음 자기장(중심·반경·신뢰구간)을 예측한다."""
+    # 1) matchId → 현재 원 특징
+    try:
+        cur = get_current_circle(req.match_id)
+    except MatchNotFoundError as e:
+        # 사용자가 이해할 수 있는 404 메시지 (서버는 죽지 않는다)
+        raise HTTPException(status_code=404, detail=str(e))
+
+    # 2) 모델 로드(최초 1회) 및 추론
+    try:
+        predictor = get_predictor()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=f"모델이 아직 준비되지 않았습니다: {e}")
+
+    out = predictor.predict(
+        cur["safety_x"], cur["safety_y"], cur["safety_radius"],
+        phase=cur["phase"], map_name=cur["map_name"], conf=0.95,
+    )
+
+    # 3) 응답 구성
     return PredictResponse(
         match_id=req.match_id,
-        phase=0,
-        predicted=Circle(x=0.0, y=0.0, radius=0.0),
-        confidence_radius=None,
-        model_name="baseline(stub)",
+        phase=cur["phase"],
+        predicted=Circle(x=out["x"], y=out["y"], radius=out["radius"]),
+        confidence_radius=out["confidence_radius"],
+        model_name="RF(delta)+gaussian",
     )

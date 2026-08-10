@@ -97,7 +97,9 @@ def plot_shrink_ratio(df: pd.DataFrame, path: str):
     data = [df[df["phase"] == p]["shrink_ratio"].values for p in phases]
 
     plt.figure(figsize=(8, 5))
-    plt.boxplot(data, labels=[f"P{int(p)}" for p in phases])
+    # labels= 파라미터는 matplotlib 3.9에서 deprecated → 버전 무관하게 xticks로 라벨 지정
+    plt.boxplot(data)
+    plt.xticks(range(1, len(phases) + 1), [f"P{int(p)}" for p in phases])
     plt.axhline(1.0, color="red", ls="--", lw=0.8, label="ratio 1.0 (no shrink)")
     plt.title("Shrink ratio distribution per phase (poison_radius / safety_radius)")
     plt.ylabel("shrink ratio")
@@ -115,12 +117,17 @@ def main():
     stats = build_phase_stats(df)
 
     # 통계 표 출력
+    # 주의: 좌표/이동량(dx, dy, move)은 텔레메트리 원본 단위인 cm다.
+    #       미터로 보려면 100으로 나눈다 (예: move 1388cm = 13.9m).
+    #       헷갈리지 않도록 move는 cm와 m를 함께 출력한다.
     print("=== 단계별 통계 (phase_stats) ===")
-    print(f"{'phase':>5} {'n':>4} {'dx_mean':>12} {'dy_mean':>12} {'shrink_mean':>12} {'move_mean':>12}")
+    print(f"{'phase':>5} {'n':>4} {'dx_cm':>11} {'dy_cm':>11} "
+          f"{'shrink':>9} {'move_cm':>11} {'move_m':>9}")
     for p in sorted(stats.keys(), key=int):
         s = stats[p]
-        print(f"{p:>5} {s['n']:>4} {s['dx_mean']:>12.1f} {s['dy_mean']:>12.1f} "
-              f"{s['shrink_ratio_mean']:>12.3f} {s['move_dist_mean']:>12.1f}")
+        move_cm = s["move_dist_mean"]
+        print(f"{p:>5} {s['n']:>4} {s['dx_mean']:>11.1f} {s['dy_mean']:>11.1f} "
+              f"{s['shrink_ratio_mean']:>9.3f} {move_cm:>11.1f} {move_cm/100:>9.1f}")
 
     plot_movement_vectors(stats, os.path.join(FIG_DIR, "movement_vectors.png"))
     plot_shrink_ratio(df, os.path.join(FIG_DIR, "shrink_ratio.png"))
