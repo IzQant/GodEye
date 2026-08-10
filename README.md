@@ -8,6 +8,12 @@ PUBG 매치 텔레메트리를 기반으로 다음 자기장(파란 원)의 위�
 FastAPI 백엔드 + PostgreSQL + scikit-learn 예측 모델 + OpenCV 원 검출 → Docker 배포.
 사용자가 matchId 또는 미니맵 스크린샷을 입력하면 다음 자기장 예측 위치를 반환한다.
 
+## Week 5 구현 목표 (설계 결정, 2026-08-17 확정)
+이미지 경로를 "전체 지도 화면 업로드 + phase·맵 사용자 입력 → 다음 자기장 예측"으로
+구현한다. phase는 자동 검출이 어려워 사용자 입력으로 받고, CV는 현재 원 위치만 찾는다.
+전체 지도 화면이어야 픽셀→맵 좌표 변환이 안정적. 검출 실패 시 수동 좌표 입력 폴백.
+상세: friday/raw/memories/design_image_phase_input.md
+
 ## 프로젝트 구조
 ```
 app/          FastAPI 앱 (main.py, config.py, routers/, services/, templates/)
