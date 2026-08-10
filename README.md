@@ -69,3 +69,13 @@ uvicorn app.main:app --reload   # http://127.0.0.1:8000/health
 - Day 19 (08-08): train_final.py (최종 모델 joblib 직렬화), model_service.py (1회 로드 캐시 + 맵별 폴백 확장 여지)
 - Day 20 (08-09): /api/predict 실구현 (match_service로 현재 원 추출 → 모델 추론 → JSON). 실 matchId 200 / 오류 matchId 404 확인
 - Day 21 (08-10): pytest 7개(단위4+통합3) 통과, 예외처리(404/422/503), 주간 회고 [v0.3]
+
+### Week 4 (08-11 ~ 08-17) — 컴퓨터 비전 원 검출
+- Day 22 (08-11): data/images 구조(real/synthetic)+README, check_images.py(검증), make_synthetic_minimaps.py(합성 100장+정답, 다양한 해상도). real 20장은 본인 캡처 필요
+- Day 23 (08-12): circle_detector.py (HSV 색상 필터링: BGR→HSV→inRange→모폴로지). show_masks.py 시각화, 합성 100장 마스크 분리 성공
+- Day 24 (08-13): detect_circle/detect_circles (Contour+minEnclosingCircle), eval_detection.py. 합성 100장 검출 성공률 100%(중심0px/반경~2px). 실 스크린샷은 Day 25 폴백 대비
+- Day 25 (08-14): 신뢰도(circularity)+detect_with_confidence(수동입력 폴백 분기), analyze_failures.py. clean 95%검출 / 어려운 변형 100% 폴백 트리거 확인
+- Day 26 (08-15): coordinate_transform.py (픽셀→맵 좌표: 어파인 스케일/오프셋 + 호모그래피), verify_transform.py로 기준점 보정 후 오차 ~0 검증
+- (데이터) make_map_overlays.py: 텔레메트리+실제 맵 이미지 오버레이로 준실사 라벨 미니맵 대량 생성 (data/maps/에 맵 이미지 필요)
+- Day 27 (08-16): circle_detector를 CircleDetector 클래스로 정리, test_detector.py 5개 추가(전체 통과). 예측 라우터 모델오류 503 처리
+- Day 28 (08-17): /api/detect 실구현(이미지 업로드→흰/파란 원 좌표+needs_manual), 주간 회고 [v0.4]

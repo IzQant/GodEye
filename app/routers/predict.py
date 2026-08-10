@@ -24,9 +24,11 @@ def predict_next_circle(req: PredictRequest):
         raise HTTPException(status_code=404, detail=str(e))
 
     # 2) 모델 로드(최초 1회) 및 추론
+    #    파일 없음/역직렬화 실패(예: 라이브러리 버전 불일치) 등 모든 로드 오류를
+    #    503으로 처리해, 모델 문제로 서버가 500을 내지 않도록 한다.
     try:
         predictor = get_predictor()
-    except FileNotFoundError as e:
+    except Exception as e:
         raise HTTPException(status_code=503, detail=f"모델이 아직 준비되지 않았습니다: {e}")
 
     out = predictor.predict(

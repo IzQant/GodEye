@@ -34,10 +34,12 @@ class PredictResponse(BaseModel):
 
 # ---------- /api/detect ----------
 class DetectResponse(BaseModel):
-    """스크린샷에서 검출한 원. 픽셀 좌표와 (변환 가능하면) 맵 좌표를 함께 반환."""
-    pixel: Circle = Field(..., description="화면 픽셀 기준 좌표")
-    map_coord: Circle | None = Field(
-        None, description="맵 좌표계로 변환한 값. 변환 실패 시 null"
+    """스크린샷에서 검출한 원(픽셀 좌표). 흰 원=현재, 파란 원=다음 자기장."""
+    safe: Circle | None = Field(None, description="현재 안전지대(흰 원) 픽셀 좌표")
+    next_zone: Circle | None = Field(None, description="다음 자기장(파란 원) 픽셀 좌표")
+    needs_manual: bool = Field(
+        ..., description="검출 신뢰도가 낮아 수동 좌표 입력이 필요한지"
     )
-    detected: bool = Field(..., description="검출 성공 여부")
-    message: str | None = Field(None, description="실패 사유 등 부가 메시지")
+    reasons: list[str] = Field(
+        default_factory=list, description="needs_manual인 경우 사유 목록"
+    )
