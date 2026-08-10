@@ -3,9 +3,17 @@ __pycache__/
 .venv/
 venv/
 .env
+
+# 생성/수집 데이터는 git에 넣지 않는다 (재생성 가능, 용량 큼)
+# 주의: data/images/*.png 는 하위폴더를 못 거른다 → ** 로 지정
 data/raw/*.json
-data/images/*.png
-data/images/*.jpg
+data/images/**/*.png
+data/images/**/*.jpg
+data/images/**/*.jpeg
+# 맵 이미지(저작물·대용량)도 제외
+data/maps/*.png
+data/maps/*.jpg
+
 *.joblib
 .pytest_cache/
 .DS_Store
