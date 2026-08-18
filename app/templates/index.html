@@ -1,310 +1,315 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GodEye — PUBG 자기장 예측</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#020715; --surface:#0a1330; --surface2:#0e1a3d;
+      --border:#1b2a57; --text:#e7ecfb; --muted:#8c99c2;
+      --gold1:#EB7D00; --gold2:#FFC349; --hot:#ff5a6a;
+    }
+    body{background:#020715;color:var(--text);min-height:100vh;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;}
+    .wrap{max-width:900px;margin:0 auto;padding:32px 18px 60px;}
+    .brand{margin:14px 0 12px;text-align:center;}
+    .brand h1{font-family:'Press Start 2P',monospace;font-size:2.85rem;line-height:1.2;letter-spacing:1px;margin:0;
+      background:linear-gradient(180deg,var(--gold2),var(--gold1));-webkit-background-clip:text;
+      background-clip:text;-webkit-text-fill-color:transparent;}
+    .sub{color:var(--muted);font-size:.92rem;margin-bottom:22px;text-align:center;}
+    .panel{background:linear-gradient(180deg,var(--surface2),var(--surface));
+      border:1px solid var(--border);padding:0;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.35);}
+    .seg{display:flex;gap:6px;padding:10px 10px 0;}
+    .seg button{flex:1;border:1px solid transparent;background:transparent;color:var(--muted);
+      padding:10px 12px;font-weight:600;cursor:pointer;}
+    .seg button.active{color:#fff;background:var(--surface);border-color:var(--border);border-bottom-color:transparent;}
+    .pane{padding:20px;display:none;}
+    .pane.active{display:block;}
+    .body{padding:20px;}
+    label.lbl{display:block;font-size:.82rem;color:var(--muted);margin:0 0 6px;}
+    .field{margin-bottom:14px;}
+    input.ipt,select.ipt{width:100%;box-sizing:border-box;height:44px;background:#060d24;
+      border:1px solid var(--border);color:var(--text);padding:10px 12px;outline:none;font-size:.95rem;line-height:1.2;}
+    select.ipt{-webkit-appearance:none;appearance:none;padding-right:34px;
+      background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+      background-position:calc(100% - 17px) 19px,calc(100% - 12px) 19px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;}
+    input.ipt:focus,select.ipt:focus{border-color:var(--gold2);box-shadow:0 0 0 3px rgba(255,195,73,.18);}
+    .hint{font-size:.78rem;color:var(--muted);margin-top:5px;}
+    .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .btn-go{background:var(--gold2);border:none;color:#231400;font-weight:800;padding:11px 18px;cursor:pointer;width:100%;}
+    .btn-go:disabled{opacity:.5;cursor:not-allowed;}
+    .btn-ghost{background:#0a1836;border:1px solid var(--border);color:var(--text);padding:9px 16px;font-size:.85rem;cursor:pointer;}
+    canvas{max-width:100%;border:1px solid var(--border);background:#04091c;}
+    .step{margin-top:16px;border-top:1px solid var(--border);padding-top:16px;}
+    .step h4{font-size:.95rem;font-weight:700;margin:0 0 6px;color:var(--gold2);}
+    .btnrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px;}
+    .notice{background:rgba(255,207,92,.1);border:1px solid rgba(255,207,92,.35);color:var(--gold2);
+      padding:9px 12px;font-size:.85rem;margin-bottom:12px;}
+    .rcard{background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--border);padding:18px;}
+    .rhead{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+    .rhead .t{font-size:1.05rem;font-weight:700;}
+    .chip{font-size:.72rem;padding:3px 10px;font-weight:700;}
+    .chip-accent{background:rgba(255,195,73,.15);color:#ffcf80;border:1px solid rgba(235,125,0,.5);}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .stat{background:#060d24;border:1px solid var(--border);padding:10px 12px;}
+    .stat.wide{grid-column:1 / -1;}
+    .stat .k{display:block;font-size:.74rem;color:var(--muted);margin-bottom:3px;}
+    .stat .v{font-size:1rem;font-weight:700;} .stat .v.acc{color:var(--gold2);}
+    .viz{margin-top:16px;} .viz img{width:100%;border:1px solid var(--border);display:block;}
+    .vseg{display:flex;border:1px solid var(--border);width:fit-content;margin-bottom:12px;}
+    .vseg button{background:transparent;color:var(--muted);border:none;padding:7px 18px;cursor:pointer;font-weight:600;font-size:.85rem;}
+    .vseg button.active{background:var(--gold2);color:#231400;} .vseg button:disabled{opacity:.35;cursor:not-allowed;}
+    .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:.8rem;color:var(--muted);}
+    .legend .it{display:flex;align-items:center;gap:6px;} .swatch{width:14px;height:14px;display:inline-block;}
+    .grad{width:60px;height:12px;background:linear-gradient(90deg,#2b3fff,#22d3ee,#ffd000,#ff5a6a);}
+    .spinner-border-sm{color:var(--gold2);} .err{color:var(--hot);} .status{font-size:.8rem;color:var(--muted);}
+  </style>
 </head>
-<body class="bg-light">
-<div class="container py-4" style="max-width: 860px;">
-  <h3 class="mb-1">GodEye — 다음 자기장 예측</h3>
-  <p class="text-muted">matchId로 예측하거나, 전체 지도 화면을 올리고 현재 단계를 입력하세요.</p>
+<body>
+<div class="wrap">
+  <div class="brand"><h1>GodEye</h1></div>
+  <div class="sub">PUBG 다음 자기장 예측 · matchId 또는 전체 지도 화면(+현재 단계)을 입력하세요.</div>
 
-  <ul class="nav nav-tabs" role="tablist">
-    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-match" type="button">matchId</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-image" type="button">이미지 + 단계</button></li>
-  </ul>
+  <!-- 화면 1: 입력 + 지도 영역 지정 -->
+  <div id="screen-input">
+    <div class="panel">
+      <div class="seg" role="tablist">
+        <button class="active" data-target="tab-match" type="button">matchId</button>
+        <button data-target="tab-image" type="button">이미지 + 단계</button>
+      </div>
 
-  <div class="tab-content border border-top-0 rounded-bottom p-3 bg-white">
-    <!-- matchId 경로 -->
-    <div class="tab-pane fade show active" id="tab-match">
-      <form id="form-match" class="row g-2 align-items-end">
-        <div class="col-sm-9">
-          <label class="form-label">매치 ID</label>
-          <input name="match_id" class="form-control" placeholder="예: 007329f3-0a01-4a6f-..." required>
+      <div class="pane active" id="tab-match">
+        <div class="field">
+          <label class="lbl">매치 ID</label>
+          <input id="matchid" class="ipt" placeholder="예: 007329f3-0a01-4a6f-...">
         </div>
-        <div class="col-sm-3 d-grid">
-          <button class="btn btn-primary" type="submit">예측</button>
-        </div>
-      </form>
-    </div>
+        <button class="btn-go" id="go-match">예측하기</button>
+      </div>
 
-    <!-- 이미지 경로 -->
-    <div class="tab-pane fade" id="tab-image">
-      <form id="form-image" class="row g-2 align-items-end">
-        <div class="col-12">
-          <label class="form-label">전체 지도 화면 (게임에서 M 키로 연 큰 지도)</label>
-          <input name="image" type="file" accept="image/*" class="form-control" required>
-          <div class="form-text">미니맵 구석 창이 아니라 <b>전체 지도</b>를 올려야 정확합니다.</div>
+      <div class="pane" id="tab-image">
+        <div class="field">
+          <label class="lbl">전체 지도 화면 (게임에서 M 키로 연 큰 지도)</label>
+          <input id="file" type="file" accept="image/*" class="ipt">
+          <div class="hint">전체 지도 · 모니터를 찍은 사진도 괜찮습니다.</div>
         </div>
-        <div class="col-sm-4">
-          <label class="form-label">현재 단계(phase)</label>
-          <input name="phase" type="number" min="1" max="10" class="form-control" required>
-        </div>
-        <div class="col-sm-5">
-          <label class="form-label">맵</label>
-          <select name="map_name" class="form-select" required>
-            {% for m in maps %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="col-sm-3 d-grid">
-          <button class="btn btn-primary" type="submit">예측</button>
+        <div class="row2">
+          <div class="field"><label class="lbl">현재 단계 (phase)</label>
+            <input id="phase" type="number" min="1" max="10" class="ipt"></div>
+          <div class="field"><label class="lbl">맵</label>
+            <select id="map" class="ipt">{% for m in maps %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select></div>
         </div>
 
-        <!-- 사진 보정: 지도 네 모서리 지정 (사진/여백/기울어짐 대응) -->
-        <div class="col-12">
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="use-corners">
-            <label class="form-check-label" for="use-corners">
-              사진 보정 (모니터 촬영 등 지도가 화면을 꽉 채우지 않을 때 — 네 모서리 지정)
-            </label>
+        <div class="step d-none" id="calib-box">
+          <h4>지도 영역 지정</h4>
+          <div class="hint" style="margin-bottom:8px;">
+            지도 <b>네 꼭짓점을 순서대로 클릭</b>: <b>좌상 → 우상 → 우하 → 좌하</b>. 점 드래그로 미세 보정.
+            <br>지도가 이미 화면을 꽉 채운 스크린샷이면 그냥 예측하세요(영역 지정 생략 가능).
           </div>
-          <input name="corners" type="hidden">
-          <div id="calib-box" class="d-none mt-2">
-            <p class="mb-1 small text-muted">
-              지도 <b>네 꼭짓점을 순서대로 클릭</b>하세요:
-              <b>좌상 → 우상 → 우하 → 좌하</b>. 클릭 후 점을 드래그해 미세 보정도 가능합니다.
-            </p>
-            <div class="d-flex align-items-center gap-2 mb-1">
-              <button type="button" class="btn btn-sm btn-outline-secondary" id="auto-corner">자동 감지(보조)</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary" id="reset-corner">다시 찍기</button>
-              <span class="small text-muted" id="corner-status">0 / 4 지정됨</span>
-            </div>
-            <canvas id="calib-canvas" class="border rounded" style="max-width:100%; cursor:crosshair;"></canvas>
+          <div class="btnrow" style="margin-top:0;margin-bottom:8px;">
+            <button type="button" class="btn-ghost" id="auto-corner">자동 감지(보조)</button>
+            <button type="button" class="btn-ghost" id="reset-corner">다시 찍기</button>
+            <span class="status" id="corner-status">0 / 4 지정됨</span>
           </div>
+          <canvas id="calib-canvas" style="cursor:crosshair;"></canvas>
         </div>
 
-        <!-- 검출 실패 시 나타나는 수동 입력: 이미지 위에서 클릭+드래그로 현재 원 지정 -->
-        <div class="col-12 mt-2 d-none" id="manual-box">
-          <div class="alert alert-warning py-2 mb-2" id="manual-msg"></div>
-          <p class="mb-1 small text-muted">아래 이미지에서 <b>현재 흰 원의 중심을 누른 채 바깥으로 드래그</b>해 반경을 맞추세요.</p>
-          <canvas id="mark-canvas" class="border rounded" style="max-width:100%; cursor:crosshair;"></canvas>
-          <!-- 실제 픽셀 좌표는 여기에 자동 입력됨 -->
-          <input name="manual_cx" type="hidden"><input name="manual_cy" type="hidden"><input name="manual_r" type="hidden">
-          <div class="mt-2 d-flex gap-2 align-items-center">
-            <button class="btn btn-outline-primary" type="submit" id="manual-submit" disabled>표시한 원으로 예측</button>
-            <span class="small text-muted" id="manual-readout">아직 원을 지정하지 않음</span>
-          </div>
-        </div>
-      </form>
+        <button class="btn-go" id="go-image" style="margin-top:16px;">예측하기</button>
+      </div>
     </div>
   </div>
 
-  <!-- 결과 -->
-  <div class="form-check mt-3">
-    <input class="form-check-input" type="checkbox" id="use-heatmap">
-    <label class="form-check-label" for="use-heatmap">
-      히트맵으로 보기 (다음 원 중심의 확률 분포 — 실험 기능)
-    </label>
+  <!-- 화면 2: 자동 검출 실패 → 원 직접 표시 -->
+  <div id="screen-manual" class="d-none">
+    <div class="panel"><div class="body">
+      <div class="notice" id="manual-msg"></div>
+      <h4 style="font-size:.95rem;font-weight:700;margin:0 0 6px;color:var(--gold2);">현재 원 직접 표시</h4>
+      <div class="hint" style="margin-bottom:8px;">
+        아래 이미지에서 <b>현재 흰 원의 중심을 누른 채 바깥으로 드래그</b>해 반경을 맞추세요.
+      </div>
+      <canvas id="mark-canvas" style="cursor:crosshair;"></canvas>
+      <div class="btnrow">
+        <button class="btn-go" style="width:auto;" id="manual-submit" disabled>표시한 원으로 예측</button>
+        <button class="btn-ghost" id="manual-back">뒤로</button>
+        <span class="status" id="manual-readout">아직 원을 지정하지 않음</span>
+      </div>
+    </div></div>
   </div>
-  <div id="result" class="mt-2"></div>
+
+  <!-- 화면 3: 예측 결과 -->
+  <div id="screen-result" class="d-none">
+    <div id="result"></div>
+    <div class="btnrow"><button class="btn-go" id="restart">처음으로</button></div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const resultEl = document.getElementById('result');
-const manualBox = document.getElementById('manual-box');
-const manualMsg = document.getElementById('manual-msg');
-const imageForm = document.getElementById('form-image');
-const fileInput = imageForm.querySelector('input[name=image]');
-const canvas = document.getElementById('mark-canvas');
-const readout = document.getElementById('manual-readout');
-const submitBtn = document.getElementById('manual-submit');
+const $ = id => document.getElementById(id);
+const num = v => v==null ? '-' : Math.round(v).toLocaleString();
+const fileInput=$('file'), phaseInput=$('phase'), mapInput=$('map'), matchInput=$('matchid');
+const screens = {input:$('screen-input'), manual:$('screen-manual'), result:$('screen-result')};
+function showScreen(name){ for(const k in screens) screens[k].classList.toggle('d-none', k!==name); window.scrollTo({top:0,behavior:'smooth'}); }
 
-function card(inner, cls='') { return `<div class="card ${cls}"><div class="card-body">${inner}</div></div>`; }
-function num(v){ return v==null ? '-' : Math.round(v).toLocaleString(); }
-
-// ---- 수동 원 지정: 이미지 위 클릭+드래그 ----
-let markImg = null;      // 업로드 이미지(Image 객체)
-let scale = 1;           // 캔버스 표시크기 → 원본 픽셀 배율
-let center = null, radius = 0, dragging = false;
-
-fileInput.addEventListener('change', () => {
-  const f = fileInput.files[0];
-  if (!f) return;
-  const img = new Image();
-  img.onload = () => { markImg = img; };
-  img.src = URL.createObjectURL(f);
-  center = null; radius = 0; syncInputs();
+// 탭
+document.querySelectorAll('.seg button').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.pane').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); $(b.dataset.target).classList.add('active');
+  });
 });
 
-function fitCanvas(){
-  // 캔버스를 최대 폭 640으로 표시, 원본 픽셀 좌표 보존용 배율 계산
-  const maxW = 640;
-  const dispW = Math.min(markImg.naturalWidth, maxW);
-  scale = markImg.naturalWidth / dispW;
-  canvas.width = dispW;
-  canvas.height = markImg.naturalHeight / scale;
-  redraw();
-}
-function redraw(){
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(markImg, 0, 0, canvas.width, canvas.height);
-  if (center){
-    ctx.strokeStyle = '#ff3b30'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(center.x, center.y, radius, 0, 2*Math.PI); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(center.x-6,center.y); ctx.lineTo(center.x+6,center.y);
-    ctx.moveTo(center.x,center.y-6); ctx.lineTo(center.x,center.y+6); ctx.stroke();
-  }
-}
-function pos(e){
-  const r = canvas.getBoundingClientRect();
-  return { x: e.clientX - r.left, y: e.clientY - r.top };
-}
-canvas.addEventListener('mousedown', e=>{ if(!markImg) return; dragging=true; center=pos(e); radius=0; redraw(); });
-canvas.addEventListener('mousemove', e=>{ if(!dragging) return; const p=pos(e); radius=Math.hypot(p.x-center.x,p.y-center.y); redraw(); readoutUpdate(); });
-window.addEventListener('mouseup', ()=>{ if(dragging){ dragging=false; syncInputs(); } });
+// 상태
+let markImg=null, scale=1, center=null, radius=0, dragging=false;
+let cScale=1, corners=[], cornersValue='', dragCorner=-1;
+let currentBuilder=null;
 
-function readoutUpdate(){
-  readout.textContent = center ? `중심(${Math.round(center.x*scale)}, ${Math.round(center.y*scale)}) 반경 ${Math.round(radius*scale)} px` : '아직 원을 지정하지 않음';
-}
-
-// ---- 사진 보정: 지도 네 꼭짓점 4번 클릭 (+ 드래그 미세보정, 자동감지 보조) ----
-const useCorners = document.getElementById('use-corners');
-const calibBox = document.getElementById('calib-box');
-const calibCanvas = document.getElementById('calib-canvas');
-const cornerStatus = document.getElementById('corner-status');
-const LABELS = ['좌상(TL)','우상(TR)','우하(BR)','좌하(BL)'];
-let cScale = 1, corners = [], dragCorner = -1;
-
-useCorners.addEventListener('change', ()=>{
-  calibBox.classList.toggle('d-none', !useCorners.checked);
-  imageForm.corners.value = '';
-  if (useCorners.checked && markImg) initCalib();
+fileInput.addEventListener('change', ()=>{
+  const f=fileInput.files[0]; if(!f) return;
+  const img=new Image(); img.onload=()=>{ markImg=img; $('calib-box').classList.remove('d-none'); initCalib(); }; img.src=URL.createObjectURL(f);
+  center=null; radius=0; corners=[]; cornersValue='';
 });
-fileInput.addEventListener('change', ()=>{ if(useCorners.checked) setTimeout(()=>{ if(markImg) initCalib(); }, 100); });
 
+// ---- 보정(4클릭) ----
+const calibCanvas=$('calib-canvas'), cornerStatus=$('corner-status');
+const LABELS=['좌상(TL)','우상(TR)','우하(BR)','좌하(BL)'];
 function initCalib(){
-  const maxW = 640;
-  const dispW = Math.min(markImg.naturalWidth, maxW);
-  cScale = markImg.naturalWidth / dispW;
-  calibCanvas.width = dispW;
-  calibCanvas.height = markImg.naturalHeight / cScale;
-  corners = [];              // 클릭으로 하나씩 채운다
-  drawCalib(); syncCorners();
+  const dispW=Math.min(markImg.naturalWidth,720); cScale=markImg.naturalWidth/dispW;
+  calibCanvas.width=dispW; calibCanvas.height=markImg.naturalHeight/cScale; corners=[]; drawCalib(); syncCorners();
 }
 function drawCalib(){
-  const ctx = calibCanvas.getContext('2d');
-  ctx.drawImage(markImg,0,0,calibCanvas.width,calibCanvas.height);
-  if (corners.length>1){
-    ctx.strokeStyle='#0d6efd'; ctx.lineWidth=2; ctx.beginPath();
-    corners.forEach((p,i)=> i? ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
-    if (corners.length===4) ctx.closePath();
-    ctx.stroke();
-  }
-  corners.forEach((p,i)=>{
-    ctx.fillStyle='#0d6efd'; ctx.beginPath(); ctx.arc(p.x,p.y,7,0,6.28); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.font='10px sans-serif'; ctx.fillText(String(i+1),p.x-3,p.y+3);
-  });
-  const next = corners.length<4 ? ` — 다음: ${LABELS[corners.length]} 클릭` : ' — 완료';
-  cornerStatus.textContent = `${corners.length} / 4 지정됨${next}`;
+  const ctx=calibCanvas.getContext('2d'); ctx.drawImage(markImg,0,0,calibCanvas.width,calibCanvas.height);
+  if(corners.length>1){ ctx.strokeStyle='#FFC349'; ctx.lineWidth=2; ctx.beginPath();
+    corners.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); if(corners.length===4)ctx.closePath(); ctx.stroke(); }
+  corners.forEach((p,i)=>{ ctx.fillStyle='#FFC349'; ctx.beginPath(); ctx.arc(p.x,p.y,7,0,6.28); ctx.fill();
+    ctx.fillStyle='#231400'; ctx.font='bold 10px sans-serif'; ctx.fillText(String(i+1),p.x-3,p.y+3); });
+  cornerStatus.textContent=`${corners.length} / 4 지정됨`+(corners.length<4?` — 다음: ${LABELS[corners.length]} 클릭`:' — 완료');
 }
 function cpos(e){ const r=calibCanvas.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
-
-calibCanvas.addEventListener('mousedown', e=>{
-  const p=cpos(e);
-  // 기존 점 근처면 드래그 보정, 아니면(4점 미만) 새 점 추가
-  const near = corners.findIndex(c=>Math.hypot(c.x-p.x,c.y-p.y)<14);
-  if (near>=0){ dragCorner=near; }
-  else if (corners.length<4){ corners.push(p); drawCalib(); syncCorners(); }
-});
-calibCanvas.addEventListener('mousemove', e=>{
-  if(dragCorner<0) return; corners[dragCorner]=cpos(e); drawCalib(); syncCorners();
-});
+calibCanvas.addEventListener('mousedown', e=>{ const p=cpos(e);
+  const near=corners.findIndex(c=>Math.hypot(c.x-p.x,c.y-p.y)<14);
+  if(near>=0) dragCorner=near; else if(corners.length<4){ corners.push(p); drawCalib(); syncCorners(); } });
+calibCanvas.addEventListener('mousemove', e=>{ if(dragCorner<0)return; corners[dragCorner]=cpos(e); drawCalib(); syncCorners(); });
 window.addEventListener('mouseup', ()=>{ dragCorner=-1; });
-
-function syncCorners(){
-  imageForm.corners.value = corners.length===4
-    ? corners.map(p=>`${Math.round(p.x*cScale)},${Math.round(p.y*cScale)}`).join(';')
-    : '';   // 4점 미만이면 보정 미적용(전체 이미지 기준)
-}
-
-document.getElementById('reset-corner').addEventListener('click', ()=>{ corners=[]; drawCalib(); syncCorners(); });
-
-// 자동 감지(보조): 서버 추정 4점을 채워 시작점으로. 이후 클릭/드래그로 보정.
-document.getElementById('auto-corner').addEventListener('click', async ()=>{
-  if(!fileInput.files[0] || !markImg){ alert('먼저 이미지를 선택하세요.'); return; }
-  const fd = new FormData(); fd.append('image', fileInput.files[0]);
-  try {
-    const r = await fetch('/api/detect-corners', {method:'POST', body: fd});
-    if(!r.ok) return;
-    const data = await r.json();
-    corners = data.corners.map(([x,y])=>({x:x/cScale, y:y/cScale}));
-    drawCalib(); syncCorners();
-  } catch(e){ /* 무시 */ }
+function syncCorners(){ cornersValue = corners.length===4 ? corners.map(p=>`${Math.round(p.x*cScale)},${Math.round(p.y*cScale)}`).join(';') : ''; }
+$('reset-corner').addEventListener('click', ()=>{ corners=[]; drawCalib(); syncCorners(); });
+$('auto-corner').addEventListener('click', async ()=>{
+  if(!markImg)return; const fd=new FormData(); fd.append('image',fileInput.files[0]);
+  try{ const r=await fetch('/api/detect-corners',{method:'POST',body:fd}); if(!r.ok)return;
+    const d=await r.json(); corners=d.corners.map(([x,y])=>({x:x/cScale,y:y/cScale})); drawCalib(); syncCorners(); }catch(e){}
 });
-function syncInputs(){
-  const ok = center && radius > 3;
-  submitBtn.disabled = !ok;
-  imageForm.manual_cx.value = ok ? Math.round(center.x*scale) : '';
-  imageForm.manual_cy.value = ok ? Math.round(center.y*scale) : '';
-  imageForm.manual_r.value  = ok ? Math.round(radius*scale) : '';
-  readoutUpdate();
+
+// ---- 수동 원 지정 ----
+const canvas=$('mark-canvas'), readout=$('manual-readout'), submitBtn=$('manual-submit');
+function fitCanvas(){ const dispW=Math.min(markImg.naturalWidth,660); scale=markImg.naturalWidth/dispW;
+  canvas.width=dispW; canvas.height=markImg.naturalHeight/scale; redraw(); }
+function redraw(){ const ctx=canvas.getContext('2d'); ctx.drawImage(markImg,0,0,canvas.width,canvas.height);
+  if(center){ ctx.strokeStyle='#ff5a6a'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(center.x,center.y,radius,0,6.28); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(center.x-6,center.y); ctx.lineTo(center.x+6,center.y);
+    ctx.moveTo(center.x,center.y-6); ctx.lineTo(center.x,center.y+6); ctx.stroke(); } }
+function mpos(e){ const r=canvas.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
+canvas.addEventListener('mousedown', e=>{ if(!markImg)return; dragging=true; center=mpos(e); radius=0; redraw(); });
+canvas.addEventListener('mousemove', e=>{ if(!dragging)return; const p=mpos(e); radius=Math.hypot(p.x-center.x,p.y-center.y); redraw(); mReadout(); });
+window.addEventListener('mouseup', ()=>{ if(dragging){ dragging=false; submitBtn.disabled=!(center&&radius>3); } });
+function mReadout(){ readout.textContent = center?`중심(${Math.round(center.x*scale)}, ${Math.round(center.y*scale)}) 반경 ${Math.round(radius*scale)} px`:'아직 원을 지정하지 않음'; }
+$('manual-back').addEventListener('click', ()=> showScreen('input'));
+$('manual-submit').addEventListener('click', ()=>{ runAnalyze(); });
+
+// ---- 데이터 조립 ----
+function buildFD(){
+  const fd=new FormData();
+  if(currentBuilder==='match'){ fd.append('match_id', matchInput.value.trim()); return fd; }
+  fd.append('image', fileInput.files[0]);
+  fd.append('phase', phaseInput.value);
+  fd.append('map_name', mapInput.value);
+  if(cornersValue) fd.append('corners', cornersValue);
+  if(center && radius>3){ fd.append('manual_cx',Math.round(center.x*scale));
+    fd.append('manual_cy',Math.round(center.y*scale)); fd.append('manual_r',Math.round(radius*scale)); }
+  return fd;
 }
 
-function render(res){
-  if (res.needs_manual && !res.predicted){
-    manualBox.classList.remove('d-none');
-    manualMsg.textContent = '자동 검출 실패: ' + (res.reasons||[]).join(', ') + ' → 아래 이미지에서 현재 원을 직접 표시하세요.';
-    if (markImg) fitCanvas();   // 업로드 이미지로 캔버스 준비
-  }
-  const cur = res.current, pred = res.predicted;
-  resultEl.innerHTML = card(`
-    <h5 class="card-title">예측 결과 <span class="badge bg-secondary">${res.input_type}</span></h5>
-    <p class="mb-1">맵: <b>${res.map ?? '-'}</b> / 단계: <b>${res.phase ?? '-'}</b></p>
-    <p class="mb-1">현재 원(맵좌표): ${cur?`(${num(cur.x)}, ${num(cur.y)}) r=${num(cur.radius)}`:'-'}</p>
-    <p class="mb-1">예측 다음 원: ${pred?`(${num(pred.x)}, ${num(pred.y)}) r=${num(pred.radius)}`:'-'}</p>
-    <p class="mb-0">불확실성 반경(±): ${num(res.confidence_radius)}</p>
-  `, 'border-primary');
+// ---- 결과 ----
+function circleTxt(c){ return c?`(${num(c.x)}, ${num(c.y)}) · r ${num(c.radius)}`:'-'; }
+function legendHtml(heat){ return heat
+  ? `<div class="legend"><span class="it"><span class="grad"></span> 확률 낮음 → 높음</span><span class="it"><span class="swatch" style="background:#22d3ee"></span> 현재 안전지대</span></div>`
+  : `<div class="legend"><span class="it"><span class="swatch" style="background:#fff"></span> 현재 원</span><span class="it"><span class="swatch" style="background:#4f8cff"></span> 예측 다음 원</span><span class="it"><span class="swatch" style="background:#e6c878"></span> 불확실성 범위</span></div>`; }
+function renderResult(res){
+  const confM = res.confidence_radius==null?'-':`± ${num(res.confidence_radius/100)} m`;
+  $('result').innerHTML = `
+    <div class="rcard">
+      <div class="rhead"><span class="t">예측 결과</span><span class="chip chip-accent">${res.input_type}</span></div>
+      <div class="grid">
+        <div class="stat"><span class="k">맵</span><span class="v">${res.map ?? '-'}</span></div>
+        <div class="stat"><span class="k">단계 (phase)</span><span class="v">${res.phase ?? '-'}</span></div>
+        <div class="stat wide"><span class="k">불확실성 반경</span><span class="v acc">${confM}</span></div>
+      </div>
+    </div>`;
+}
+async function preloadViews(){
+  const fetchBlob = url => fetch(url,{method:'POST',body:buildFD()}).then(r=>r.ok?r.blob():null).catch(()=>null);
+  const [ov,hm] = await Promise.all([fetchBlob('/api/visualize'), fetchBlob('/api/heatmap')]);
+  const ovU=ov?URL.createObjectURL(ov):null, hmU=hm?URL.createObjectURL(hm):null;
+  if(!ovU && !hmU) return;
+  const first = ovU?'ov':'hm';
+  const box=document.createElement('div'); box.className='rcard viz';
+  box.innerHTML = `
+    <div class="vseg">
+      <button data-v="ov" ${ovU?'':'disabled'} class="${first==='ov'?'active':''}">원 예측</button>
+      <button data-v="hm" ${hmU?'':'disabled'} class="${first==='hm'?'active':''}">히트맵</button>
+    </div>
+    <img id="viz-img" src="${ovU||hmU}"><div id="viz-legend">${legendHtml(first==='hm')}</div>`;
+  $('result').appendChild(box);
+  const img=box.querySelector('#viz-img'), leg=box.querySelector('#viz-legend');
+  box.querySelectorAll('.vseg button').forEach(b=> b.addEventListener('click', ()=>{
+    if(b.disabled)return; box.querySelectorAll('.vseg button').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+    const heat=b.dataset.v==='hm'; img.src=heat?hmU:ovU; leg.innerHTML=legendHtml(heat);
+  }));
 }
 
-const useHeatmap = document.getElementById('use-heatmap');
-
-async function showOverlay(form){
-  // 히트맵 토글이 켜져 있으면 /api/heatmap, 아니면 원 오버레이(/api/visualize)
-  const heat = useHeatmap.checked;
-  const endpoint = heat ? '/api/heatmap' : '/api/visualize';
-  const title = heat ? '다음 원 확률 히트맵' : '지도 오버레이';
-  try {
-    const r = await fetch(endpoint, { method:'POST', body: new FormData(form) });
-    if (!r.ok) return;
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    resultEl.insertAdjacentHTML('beforeend',
-      card(`<h6>${title}</h6><img src="${url}" class="img-fluid rounded border">`, 'mt-2'));
-  } catch(e){ /* 시각화 실패는 무시(결과 텍스트는 이미 표시됨) */ }
-}
-
-function setBusy(form, busy){
-  form.querySelectorAll('button[type=submit]').forEach(b=>{ b.disabled = busy; });
-}
-
-async function submit(form){
-  setBusy(form, true);
-  resultEl.innerHTML = card('<div class="d-flex align-items-center gap-2 text-muted"><div class="spinner-border spinner-border-sm"></div> 예측 중...</div>');
-  try {
-    const r = await fetch('/api/analyze', { method:'POST', body: new FormData(form) });
-    let data;
-    try { data = await r.json(); } catch { data = {}; }
-    if (!r.ok){
-      const msg = r.status===429 ? '요청이 너무 잦습니다. 잠시 후 다시 시도하세요.'
-                : (data.detail || '알 수 없는 오류');
-      resultEl.innerHTML = card(`<div class="text-danger">오류 (${r.status}): ${msg}</div>`);
+async function runAnalyze(){
+  document.querySelectorAll('.btn-go').forEach(b=>b.disabled=true);
+  $('result').innerHTML = `<div class="rcard"><div class="d-flex align-items-center gap-2" style="color:var(--muted)"><div class="spinner-border spinner-border-sm"></div> 예측 중...</div></div>`;
+  showScreen('result');
+  try{
+    const r=await fetch('/api/analyze',{method:'POST',body:buildFD()});
+    let data; try{ data=await r.json(); }catch{ data={}; }
+    if(!r.ok){
+      const msg = r.status===429?'요청이 너무 잦습니다. 잠시 후 다시 시도하세요.':(data.detail||'알 수 없는 오류');
+      $('result').innerHTML = `<div class="rcard err">오류 (${r.status}): ${msg}</div>`; return;
+    }
+    if(data.needs_manual && !data.predicted){
+      $('manual-msg').textContent='자동 검출 실패: '+(data.reasons||[]).join(', ')+' → 현재 원을 직접 표시하세요.';
+      showScreen('manual'); if(markImg) fitCanvas(); submitBtn.disabled=true; center=null; radius=0; mReadout();
       return;
     }
-    render(data);
-    // 히트맵: 현재 원만 있으면 표시(점 예측 불필요). 원 오버레이: 예측이 있을 때.
-    if (useHeatmap.checked ? data.current : data.predicted) showOverlay(form);
-  } catch(e){
-    resultEl.innerHTML = card(`<div class="text-danger">요청 실패(네트워크): ${e}</div>`);
-  } finally {
-    setBusy(form, false);
-  }
+    renderResult(data); preloadViews();
+  }catch(e){ $('result').innerHTML=`<div class="rcard err">요청 실패(네트워크): ${e}</div>`; }
+  finally{ document.querySelectorAll('.btn-go').forEach(b=>b.disabled=false); }
 }
 
-document.getElementById('form-match').addEventListener('submit', e=>{e.preventDefault(); submit(e.target);});
-document.getElementById('form-image').addEventListener('submit', e=>{e.preventDefault(); submit(e.target);});
+$('go-match').addEventListener('click', ()=>{
+  if(!matchInput.value.trim()){ alert('매치 ID를 입력하세요.'); return; }
+  currentBuilder='match'; runAnalyze();
+});
+$('go-image').addEventListener('click', ()=>{
+  if(!fileInput.files[0]){ alert('이미지를 선택하세요.'); return; }
+  if(!phaseInput.value){ alert('현재 단계(phase)를 입력하세요.'); return; }
+  if(!markImg){ alert('이미지를 불러오는 중입니다. 잠시 후 다시 시도하세요.'); return; }
+  currentBuilder='image'; runAnalyze();
+});
+
+// 처음으로
+$('restart').addEventListener('click', ()=>{
+  fileInput.value=''; phaseInput.value=''; matchInput.value='';
+  markImg=null; center=null; radius=0; corners=[]; cornersValue=''; currentBuilder=null;
+  $('calib-box').classList.add('d-none'); $('result').innerHTML='';
+  showScreen('input');
+});
 </script>
 </body>
 </html>
