@@ -1,11 +1,10 @@
 """
-Day 19 작업: 최종 모델 학습 + joblib 직렬화.
+최종 모델 학습 + joblib 직렬화.
 
-Day 18에서 선정한 RF(delta)를 전체 데이터로 학습하고,
-반경 축소비율/신뢰구간 통계와 함께 ZonePredictor로 묶어
-ml/models/predictor.joblib 로 저장한다.
-
-이 파일 하나를 앱이 로드하면 /api/predict 서빙이 가능해진다(Day 20).
+[재구성] 학습 목표를 '단계 전환(phase N → phase N+1)'으로 변경.
+- 기존: 같은 스냅샷 safety→poison (초반 단계 거의 동일 → 예측 무의미).
+- 변경: phase N의 실제 원 → phase N+1의 실제 원 (단계 사이 실제 이동/축소를 예측).
+ZonePredictor 구조·인터페이스는 그대로, 학습 데이터만 전환쌍으로 바꾼다.
 
 실행: python ml/train_final.py
 """
@@ -24,6 +23,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
 from app.services.model_service import ZonePredictor, FEATURE_COLS
+from ml.dataset_pairs import build_transition_pairs
 
 BASE = os.path.dirname(__file__)
 CSV_PATH = os.path.join(BASE, "..", "data", "processed", "zones_dataset.csv")
@@ -33,31 +33,30 @@ SEED = 42
 
 def main():
     df = pd.read_csv(CSV_PATH)
-    df["dx"] = df["poison_x"] - df["safety_x"]
-    df["dy"] = df["poison_y"] - df["safety_y"]
-    df = df[df["safety_radius"] > 0].copy()
-    df["shrink"] = df["poison_radius"] / df["safety_radius"]
+    # 단계 전환쌍(phase N → N+1)으로 학습 데이터 구성
+    pairs = build_transition_pairs(df)
 
-    # 1) 중심 이동량(dx, dy) 회귀 — 전체 데이터로 학습 (배포용 최종본)
+    # 1) 중심 이동량(dx, dy) 회귀 — 전환쌍 전체로 학습
     pre = ColumnTransformer([
         ("map", OneHotEncoder(handle_unknown="ignore"), ["map"]),
         ("num", "passthrough", ["safety_x", "safety_y", "safety_radius", "phase"]),
     ])
     rf = Pipeline([("pre", pre),
                    ("rf", RandomForestRegressor(n_estimators=200, random_state=SEED, n_jobs=-1))])
-    rf.fit(df[FEATURE_COLS], df[["dx", "dy"]].values)
+    rf.fit(pairs[FEATURE_COLS], pairs[["dx", "dy"]].values)
 
-    # 2) 단계별 반경 축소비율 평균 (반경 예측용)
-    phase_shrink = df.groupby("phase")["shrink"].mean().to_dict()
+    # 2) 단계별 반경 축소비율 평균 (다음 단계 반경 예측용)
+    phase_shrink = pairs.groupby("phase")["shrink"].mean().to_dict()
     phase_shrink = {int(k): float(v) for k, v in phase_shrink.items()}
 
-    # 3) 단계별 이동량 표준편차 (신뢰구간용): sqrt((var_x+var_y)/2)
+    # 3) 단계별 이동량 표준편차 (신뢰구간용)
     phase_sigma = {}
-    for phase, g in df.groupby("phase"):
+    for phase, g in pairs.groupby("phase"):
         sx = g["dx"].std(ddof=0)
         sy = g["dy"].std(ddof=0)
         phase_sigma[int(phase)] = float(math.sqrt((sx ** 2 + sy ** 2) / 2))
 
+    df = pairs  # 아래 출력용
     predictor = ZonePredictor(rf, phase_shrink, phase_sigma)
 
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)

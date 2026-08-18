@@ -4,8 +4,9 @@
 흐름: matchId → 현재 원 추출(match_service) → 모델 추론(model_service)
       → 다음 원 중심·반경·신뢰구간 JSON 응답.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from app.rate_limit import limiter
 from app.schemas import Circle, PredictRequest, PredictResponse
 from app.services.match_service import MatchNotFoundError, get_current_circle
 from app.services.model_service import get_predictor
@@ -14,7 +15,8 @@ router = APIRouter(tags=["predict"])
 
 
 @router.post("/predict", response_model=PredictResponse)
-def predict_next_circle(req: PredictRequest):
+@limiter.limit("30/minute")
+def predict_next_circle(request: Request, req: PredictRequest):
     """matchId를 받아 다음 자기장(중심·반경·신뢰구간)을 예측한다."""
     # 1) matchId → 현재 원 특징
     try:

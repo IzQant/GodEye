@@ -32,6 +32,19 @@ class PredictResponse(BaseModel):
     model_name: str = Field("baseline", description="사용한 예측 모델 이름")
 
 
+# ---------- /api/analyze (통합) ----------
+class AnalyzeResponse(BaseModel):
+    """matchId/이미지 두 경로가 공유하는 통합 응답."""
+    input_type: str = Field(..., description='"match_id" 또는 "image"')
+    map: str | None = Field(None, description="맵 이름")
+    phase: int | None = Field(None, description="단계")
+    current: Circle | None = Field(None, description="현재 안전지대(맵 좌표)")
+    predicted: Circle | None = Field(None, description="예측된 다음 자기장(맵 좌표)")
+    confidence_radius: float | None = Field(None, description="예측 불확실성 반경")
+    needs_manual: bool = Field(False, description="수동 좌표 입력이 필요한지")
+    reasons: list[str] = Field(default_factory=list, description="needs_manual 사유")
+
+
 # ---------- /api/detect ----------
 class DetectResponse(BaseModel):
     """스크린샷에서 검출한 원(픽셀 좌표). 흰 원=현재, 파란 원=다음 자기장."""

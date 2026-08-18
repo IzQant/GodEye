@@ -1,15 +1,10 @@
 """
-Day 13 작업: 베이스라인 모델 평가.
+베이스라인/모델 평가 — 단계 전환(phase N → N+1) 목표 기준.
 
-정직한 평가를 위해:
-1. 매치 단위로 train/test 분리 (행 단위로 나누면 같은 매치가 양쪽에 섞여 누수 발생)
-2. train 매치들로만 phase_stats(단계별 평균 통계)를 계산
-3. test 매치의 각 행에 대해 "현재 원(safety)"을 입력해 다음 원을 예측하고,
-   실제 다음 원(poison) 중심과의 유클리드 거리(m)를 오차로 측정
-
-좌표 단위는 텔레메트리 기준 cm이므로, 거리(cm)를 100으로 나눠 m로 환산한다.
-
-완료 기준(Day 13): 베이스라인 평균 오차(m) 수치 확보 및 기록.
+[재구성] 예측 목표를 단계 전환으로 바꾼 뒤의 평가.
+- 매치 단위 train/test 분리(누수 방지)
+- train 전환쌍으로 phase별 평균 이동/축소 통계(=베이스라인) 및 RF 학습
+- test 전환쌍에서 예측 중심과 실제 다음 원 중심의 거리(m) 측정
 
 실행: python ml/evaluate.py
 """
@@ -17,12 +12,16 @@ import os
 import sys
 
 sys.path.append(os.path.dirname(__file__))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 import numpy as np
 import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
 
-from analyze_patterns import build_phase_stats, compute_features
-from baseline_model import BaselineModel
+from ml.dataset_pairs import build_transition_pairs
 
 BASE = os.path.dirname(__file__)
 CSV_PATH = os.path.join(BASE, "..", "data", "processed", "zones_dataset.csv")
@@ -31,104 +30,100 @@ REPORT_PATH = os.path.join(BASE, "..", "friday", "raw", "memories", "baseline_ev
 CM_PER_M = 100.0
 TEST_RATIO = 0.2
 SEED = 42
+FEATURES = ["map", "safety_x", "safety_y", "safety_radius", "phase"]
 
 
-def split_matches(df: pd.DataFrame):
-    """고유 매치 ID를 섞어 train/test로 나눈다 (매치 단위 분리)."""
+def split_matches(pairs):
     rng = np.random.default_rng(SEED)
-    match_ids = df["match_id"].unique()
-    rng.shuffle(match_ids)
-    n_test = max(1, int(len(match_ids) * TEST_RATIO))
-    test_ids = set(match_ids[:n_test])
-    train_ids = set(match_ids[n_test:])
-    return train_ids, test_ids
+    ids = pairs["match_id"].unique()
+    rng.shuffle(ids)
+    n_test = max(1, int(len(ids) * TEST_RATIO))
+    test_ids = set(ids[:n_test])
+    return pairs[~pairs["match_id"].isin(test_ids)], pairs[pairs["match_id"].isin(test_ids)]
 
 
 def evaluate():
-    df = compute_features(pd.read_csv(CSV_PATH))
-    train_ids, test_ids = split_matches(df)
+    pairs = build_transition_pairs(pd.read_csv(CSV_PATH))
+    train, test = split_matches(pairs)
 
-    train_df = df[df["match_id"].isin(train_ids)]
-    test_df = df[df["match_id"].isin(test_ids)]
+    # 베이스라인: phase별 평균 이동량 (train)
+    means = train.groupby("phase")[["dx", "dy"]].mean()
+    gmean = train[["dx", "dy"]].mean()
 
-    # train 데이터로만 통계 생성 → 모델에 주입
-    stats = build_phase_stats(train_df)
-    model = BaselineModel.from_stats(stats)
+    def base_delta(ph):
+        return (means.loc[ph] if ph in means.index else gmean)
 
-    # test 각 행에 대해 예측하고 실제 poison 중심과의 거리 계산
-    errors = []
-    per_phase = {}
-    for _, row in test_df.iterrows():
-        pred = model.predict(row["safety_x"], row["safety_y"],
-                             row["safety_radius"], int(row["phase"]))
-        dist_cm = np.hypot(pred["x"] - row["poison_x"], pred["y"] - row["poison_y"])
-        dist_m = dist_cm / CM_PER_M
-        errors.append(dist_m)
-        per_phase.setdefault(int(row["phase"]), []).append(dist_m)
+    # RF: 특징 → 이동량
+    rf = Pipeline([
+        ("pre", ColumnTransformer([
+            ("map", OneHotEncoder(handle_unknown="ignore"), ["map"]),
+            ("num", "passthrough", ["safety_x", "safety_y", "safety_radius", "phase"]),
+        ])),
+        ("rf", RandomForestRegressor(n_estimators=200, random_state=SEED, n_jobs=-1)),
+    ])
+    rf.fit(train[FEATURES], train[["dx", "dy"]].values)
 
-    errors = np.array(errors)
+    # test 예측/오차
+    copy_err, base_err, rf_err, per_phase = [], [], [], {}
+    rf_pred = rf.predict(test[FEATURES])
+    for i, (_, r) in enumerate(test.iterrows()):
+        ax, ay = r["safety_x"] + r["dx"], r["safety_y"] + r["dy"]  # 실제 다음 중심
+        # copy: 다음=현재
+        copy_err.append(np.hypot(r["safety_x"] - ax, r["safety_y"] - ay) / CM_PER_M)
+        # baseline: 현재 + phase 평균 이동
+        bd = base_delta(int(r["phase"]))
+        base_err.append(np.hypot(r["safety_x"] + bd["dx"] - ax, r["safety_y"] + bd["dy"] - ay) / CM_PER_M)
+        # rf
+        e = np.hypot(r["safety_x"] + rf_pred[i, 0] - ax, r["safety_y"] + rf_pred[i, 1] - ay) / CM_PER_M
+        rf_err.append(e)
+        per_phase.setdefault(int(r["phase"]), []).append(e)
+
+    def stat(a):
+        a = np.array(a)
+        return a.mean(), np.median(a), np.percentile(a, 90)
+
     return {
-        "n_train_matches": len(train_ids),
-        "n_test_matches": len(test_ids),
-        "n_test_rows": len(errors),
-        "mean_m": float(errors.mean()),
-        "median_m": float(np.median(errors)),
-        "p90_m": float(np.percentile(errors, 90)),
+        "n_train": len(train), "n_test": len(test),
+        "copy": stat(copy_err), "base": stat(base_err), "rf": stat(rf_err),
         "per_phase": {p: float(np.mean(v)) for p, v in sorted(per_phase.items())},
     }
 
 
-def write_report(r: dict):
-    lines = [
-        "# 베이스라인 모델 평가 리포트 (Day 13)",
-        "",
-        f"- 분리: 매치 단위 train/test (test 비율 {TEST_RATIO}, seed {SEED})",
-        f"- train 매치 {r['n_train_matches']}개 / test 매치 {r['n_test_matches']}개 "
-        f"(test 행 {r['n_test_rows']}개)",
-        "",
-        "## 오차 (다음 원 중심 예측, 단위 m)",
-        f"- 평균: {r['mean_m']:.1f} m",
-        f"- 중앙값: {r['median_m']:.1f} m",
-        f"- 90퍼센타일: {r['p90_m']:.1f} m",
-        "",
-        "## 단계별 평균 오차 (m)",
-    ]
+def main():
+    r = evaluate()
+    print("=== 단계 전환 예측 평가 (다음 원 중심 오차, m) ===")
+    print(f"train 전환쌍 {r['n_train']} / test {r['n_test']}\n")
+    print(f"{'model':<10}{'mean':>9}{'median':>9}{'p90':>9}")
+    for name, key in (("copy", "copy"), ("baseline", "base"), ("RF", "rf")):
+        m, md, p9 = r[key]
+        print(f"{name:<10}{m:>9.1f}{md:>9.1f}{p9:>9.1f}")
+    print("\nRF 단계별 평균 오차(m):")
     for p, e in r["per_phase"].items():
-        lines.append(f"- phase {p}: {e:.1f} m")
-    lines += [
+        print(f"  phase {p}: {e:.1f}")
+
+    lines = [
+        "# 모델 평가 리포트 (단계 전환 phase N→N+1 목표)",
         "",
-        "## 해석 (중요)",
-        "- 오차가 전반적으로 매우 작게 나온다(중앙값 <1m). 이는 모델이 뛰어나서가 아니라,",
-        "  예측 대상인 다음 원(poison)이 같은 스냅샷에서 현재 원(safety) 기준으로",
-        "  이미 게임이 발표한 값이고, 초반 단계는 자기장이 거의 동심원(중심 그대로,",
-        "  반경만 축소)이어서 '다음=현재'로 찍어도 오차가 0에 가깝기 때문이다.",
-        "- 실제로 의미 있는 이동/오차는 중후반(phase 5~7)에 집중된다.",
-        "- 따라서 이 베이스라인은 '미래 예측'보다 '이미 드러난 다음 원 재현'에 가깝다.",
-        "  Week 3에서 더 어렵고 유용한 목표(예: 한 단계 더 앞의 원 예측)로",
-        "  재구성할 여지가 있다.",
-        "- 이 수치는 Week 3 회귀/확률분포 모델과 비교할 기준선(baseline)이다.",
-        "- 데이터가 20매치로 적어(test 4매치) 표본이 적은 단계의 수치는 변동이 크다.",
+        f"- 매치 단위 train/test (seed {SEED}), train 전환쌍 {r['n_train']} / test {r['n_test']}",
+        "- 지표: 예측한 다음 원 중심과 실제 다음 원 중심의 거리(m)",
+        "",
+        "## 모델별 오차(m)",
+        "| 모델 | 평균 | 중앙값 | p90 |",
+        "|------|-----:|------:|----:|",
+        f"| copy(다음=현재) | {r['copy'][0]:.1f} | {r['copy'][1]:.1f} | {r['copy'][2]:.1f} |",
+        f"| baseline(단계평균) | {r['base'][0]:.1f} | {r['base'][1]:.1f} | {r['base'][2]:.1f} |",
+        f"| RF | {r['rf'][0]:.1f} | {r['rf'][1]:.1f} | {r['rf'][2]:.1f} |",
+        "",
+        "## 해석",
+        "- 이제 copy(다음=현재)는 실제 단계 이동 전체를 오차로 가짐(초반 수백 m).",
+        "  즉 예측이 의미를 가지며, baseline/RF가 copy보다 낮아야 학습이 유효함.",
+        "- 초반 단계일수록 이동이 커서 예측 난도가 높고 오차도 큼(정상).",
+        "- 데이터가 적어 표본 적은 후반 단계는 변동이 큼.",
     ]
     os.makedirs(os.path.dirname(REPORT_PATH), exist_ok=True)
     with open(REPORT_PATH, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
-
-
-def main():
-    r = evaluate()
-    print("=== 베이스라인 평가 결과 ===")
-    print(f"train 매치 {r['n_train_matches']} / test 매치 {r['n_test_matches']} "
-          f"(test 행 {r['n_test_rows']})")
-    print(f"평균 오차:   {r['mean_m']:.1f} m")
-    print(f"중앙값 오차: {r['median_m']:.1f} m")
-    print(f"90%ile 오차: {r['p90_m']:.1f} m")
-    print("\n단계별 평균 오차(m):")
-    for p, e in r["per_phase"].items():
-        print(f"  phase {p}: {e:.1f} m")
-
-    write_report(r)
-    print(f"\n리포트 저장: {REPORT_PATH}")
-    print("✅ Day 13 완료 기준 통과: 베이스라인 평균 오차(m) 수치 확보 및 기록")
+    print(f"\n리포트: {REPORT_PATH}")
 
 
 if __name__ == "__main__":

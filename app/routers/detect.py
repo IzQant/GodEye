@@ -6,8 +6,9 @@
 """
 import cv2
 import numpy as np
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
+from app.rate_limit import limiter
 from app.schemas import Circle, DetectResponse
 from app.services.circle_detector import CircleDetector
 
@@ -16,7 +17,8 @@ _detector = CircleDetector()  # 검출기 1회 생성 후 재사용
 
 
 @router.post("/detect", response_model=DetectResponse)
-async def detect_circle(image: UploadFile = File(..., description="미니맵 스크린샷")):
+@limiter.limit("30/minute")
+async def detect_circle(request: Request, image: UploadFile = File(..., description="미니맵 스크린샷")):
     """업로드된 이미지에서 흰/파란 원을 검출한다."""
     # 업로드 바이트 → OpenCV 이미지로 디코드
     data = await image.read()

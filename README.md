@@ -6,7 +6,15 @@ PUBG 매치 텔레메트리를 기반으로 다음 자기장(파란 원)의 위�
 
 ## 아키텍처 (목표)
 FastAPI 백엔드 + PostgreSQL + scikit-learn 예측 모델 + OpenCV 원 검출 → Docker 배포.
-사용자가 matchId 또는 미니맵 스크린샷을 입력하면 다음 자기장 예측 위치를 반환한다.
+사용자가 matchId 또는 전체 지도 스크린샷(+현재 단계)을 입력하면 다음 자기장 예측 위치를 반환한다.
+
+## 현재 기능 (v0.5, 로컬 데모)
+- 웹 UI(`/`): matchId 탭 / 이미지+단계 탭, 지도 오버레이 결과.
+- API: `/api/predict`, `/api/detect`, `/api/analyze`(통합), `/api/visualize`(PNG). `/health`.
+- 이미지 경로: 전체지도 업로드 + phase·맵 입력, 자동 검출→실패 시 클릭·드래그 수동 지정,
+  사진 보정(지도 네 모서리→원근 변환)으로 촬영 사진도 처리.
+- 예측: 단계 전환(phase N→N+1) 모델. 다음 원 중심·반경 + 불확실성 반경.
+- 안전장치: 레이트리밋(IP당 분당 30), 요청 로깅(request_logs), 친화적 에러(422/400/404/503/429).
 
 ## Week 5 구현 목표 (설계 결정, 2026-08-17 확정)
 이미지 경로를 "전체 지도 화면 업로드 + phase·맵 사용자 입력 → 다음 자기장 예측"으로
@@ -85,3 +93,14 @@ uvicorn app.main:app --reload   # http://127.0.0.1:8000/health
 - (데이터) make_map_overlays.py: 텔레메트리+실제 맵 이미지 오버레이로 준실사 라벨 미니맵 대량 생성 (data/maps/에 맵 이미지 필요)
 - Day 27 (08-16): circle_detector를 CircleDetector 클래스로 정리, test_detector.py 5개 추가(전체 통과). 예측 라우터 모델오류 503 처리
 - Day 28 (08-17): /api/detect 실구현(이미지 업로드→흰/파란 원 좌표+needs_manual), 주간 회고 [v0.4]
+
+### Week 5 (08-18 ~ 08-24) — 파이프라인 통합 + 프론트엔드
+- Day 29 (08-18): pipeline.py (matchId/이미지 두 경로 → 동일 결과 스키마). 이미지 경로=전체지도+phase+맵+수동폴백. 예측기 주입형
+- Day 30 (08-19): /api/analyze 통합 엔드포인트(입력검증+친화적 에러 422/400/404/503), test_analyze.py 5개 통과
+- Day 31 (08-20): Jinja2+Bootstrap 프론트엔드(matchId/이미지 탭, 맵 선택, 결과 카드)
+- Day 32 (08-21): 결과 지도 오버레이(visualize.py, /api/visualize PNG), 프론트 표시
+- (개선) 수동 입력을 클릭+드래그 원 지정 + 사진 보정(4모서리 원근변환, perspective.py)
+- (모델 재구성) 예측 목표를 단계 전환(phase N→N+1)으로 변경 → 초반 단계도 의미있는 축소·이동 예측.
+- Day 33 (08-22): 레이트리밋(rate_limit.py, 데코레이터) + 요청 로깅(request_log.py, request_logs)
+- Day 34 (08-23): E2E 3시나리오 테스트(test_e2e.py), 검출 실패 시 모델 로드 지연 수정
+- Day 35 (08-24): UI 다듬기(로딩/버튼/429), README·발표개요, 주간 회고 [v0.5]
