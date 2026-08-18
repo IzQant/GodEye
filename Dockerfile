@@ -26,5 +26,7 @@ RUN python ml/train_final.py
 COPY start.sh .
 RUN chmod +x start.sh
 
-EXPOSE 8000
+# 플랫폼이 PORT를 안 주면 8080에 바인딩(Railway 기본 타겟과 일치).
+ENV PORT=8080
+EXPOSE 8080
 CMD ["./start.sh"]
