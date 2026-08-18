@@ -13,7 +13,9 @@ _model_missing = not os.path.exists(MODEL_PATH)
 def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok"}
+    body = r.json()
+    assert body["status"] == "ok"
+    assert "db" in body            # DB 상태 필드 포함(ok/down)
 
 
 @pytest.mark.skipif(_model_missing, reason="predictor.joblib 없음 (ml/train_final.py 먼저 실행)")

@@ -53,8 +53,16 @@ def index(request: Request):
 @app.get("/health")
 def health():
     """
-    헬스체크 엔드포인트.
-    지금은 단순히 200 OK만 반환한다.
-    (Week 6 배포 시 DB 연결 확인까지 넣도록 확장 예정 — 부록 배포 체크리스트 참고)
+    헬스체크: 서비스 생존 + DB 연결 상태를 함께 보고한다.
+    DB가 죽어도 핵심 기능(예측/검출)은 동작하므로 200을 유지하고, db 필드로만 상태를 알린다
+    (UptimeRobot이 DB 일시 장애로 계속 알림 울리는 것 방지).
     """
-    return {"status": "ok"}
+    db_status = "ok"
+    try:
+        from sqlalchemy import text
+        from app.database import engine
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception:
+        db_status = "down"
+    return {"status": "ok", "db": db_status}

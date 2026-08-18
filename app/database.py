@@ -21,7 +21,10 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # pool_pre_ping: 끊긴 커넥션을 미리 감지해 재연결 (무료 호스팅에서 유용)
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+# Postgres는 connect_timeout을 걸어 DB가 죽었을 때 무한 대기하지 않게 한다
+# (헬스체크가 멈추는 것 방지). sqlite(테스트)는 이 옵션을 안 받으므로 분기.
+_connect_args = {"connect_timeout": 3} if DATABASE_URL.startswith("postgresql") else {}
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=_connect_args)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
