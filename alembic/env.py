@@ -24,6 +24,8 @@ config = context.config
 
 # .env의 DATABASE_URL을 우선 사용, 없으면 로컬 compose 기본값
 db_url = settings.DATABASE_URL or "postgresql://pubg:pubg@localhost:5432/pubg_zone"
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
 config.set_main_option("sqlalchemy.url", db_url)
 
 if config.config_file_name is not None:

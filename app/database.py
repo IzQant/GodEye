@@ -15,6 +15,11 @@ from app.config import settings
 # DATABASE_URL이 비어 있으면 로컬 compose 기본값으로 대체.
 DATABASE_URL = settings.DATABASE_URL or "postgresql://pubg:pubg@localhost:5432/pubg_zone"
 
+# 일부 플랫폼(Render/Heroku 등)은 'postgres://'를 주는데 SQLAlchemy 2.0은
+# 'postgresql://'만 인식하므로 접두사를 보정한다.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 # pool_pre_ping: 끊긴 커넥션을 미리 감지해 재연결 (무료 호스팅에서 유용)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
