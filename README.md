@@ -1,60 +1,91 @@
 # GodEye
 배틀그라운드 실시간 자기장 예측 서비스
 
-PUBG 매치 텔레메트리를 기반으로 다음 자기장(파란 원)의 위치·반경을 예측하는 웹 서비스.
-6주 구현 로드맵 기준 진행 중 (2026-07-21 시작).
+PUBG 매치 텔레메트리를 기반으로 **다음 자기장(안전지대)의 위치·반경을 예측**하는 웹 서비스.
+FastAPI + scikit-learn + OpenCV로 만들었고, Docker로 Railway에 배포되어 공개 URL(HTTPS)로 동작한다.
 
-## 아키텍처 (목표)
-FastAPI 백엔드 + PostgreSQL + scikit-learn 예측 모델 + OpenCV 원 검출 → Docker 배포.
-사용자가 matchId 또는 전체 지도 스크린샷(+현재 단계)을 입력하면 다음 자기장 예측 위치를 반환한다.
+## 기능
+- 웹 UI(`/`): matchId 탭 / 이미지+단계 탭. 결과를 지도 위에 오버레이(또는 확률 히트맵)로 표시.
+- 두 입력 경로:
+  - **matchId**: PUBG API 텔레메트리 조회 → 현재 원 → 예측.
+  - **이미지**: 전체 지도 화면 업로드 + 현재 phase·맵 입력 → (자동 검출/수동 지정) 현재 원 → 예측.
+    사진 보정(지도 네 꼭짓점 4클릭 → 원근 변환)으로 모니터 촬영 사진도 처리.
+- 예측 모델: **단계 전환(phase N→N+1)** 회귀(RandomForest) + 단계별 축소비율 + 불확실성.
+  확률 히트맵(KDE)로 "다음 원이 있을 확률 분포"도 제공.
+- API: `/health`, `/api/predict`, `/api/detect`, `/api/analyze`(통합), `/api/visualize`(오버레이 PNG),
+  `/api/heatmap`(확률 히트맵 PNG), `/api/detect-corners`(사진 보정 보조).
+- 안전장치: 레이트리밋(IP당 분당 30, 429), 요청 로깅(request_logs), 친화적 에러(422/400/404/503),
+  `/health` DB 핑.
 
-## 현재 기능 (v0.5, 로컬 데모)
-- 웹 UI(`/`): matchId 탭 / 이미지+단계 탭, 지도 오버레이 결과.
-- API: `/api/predict`, `/api/detect`, `/api/analyze`(통합), `/api/visualize`(PNG). `/health`.
-- 이미지 경로: 전체지도 업로드 + phase·맵 입력, 자동 검출→실패 시 클릭·드래그 수동 지정,
-  사진 보정(지도 네 모서리→원근 변환)으로 촬영 사진도 처리.
-- 예측: 단계 전환(phase N→N+1) 모델. 다음 원 중심·반경 + 불확실성 반경.
-- 안전장치: 레이트리밋(IP당 분당 30), 요청 로깅(request_logs), 친화적 에러(422/400/404/503/429).
-
-## Week 5 구현 목표 (설계 결정, 2026-08-17 확정)
-이미지 경로를 "전체 지도 화면 업로드 + phase·맵 사용자 입력 → 다음 자기장 예측"으로
-구현한다. phase는 자동 검출이 어려워 사용자 입력으로 받고, CV는 현재 원 위치만 찾는다.
-전체 지도 화면이어야 픽셀→맵 좌표 변환이 안정적. 검출 실패 시 수동 좌표 입력 폴백.
-상세: friday/raw/memories/design_image_phase_input.md
+## 예측에 대한 정직한 설명
+PUBG는 다음 원 중심을 현재 원 안에서 상당히 무작위로 정한다. 따라서 **중심 점 예측은 원리적 한계**가
+있고(RF ≈ copy 기준선), 이 서비스의 가치는 (1) **반경 축소 예측**, (2) **확률 범위(히트맵)** 제시에 있다.
+자세한 실험·근거는 `friday/raw/memories/` 문서들 참고(model_reframe_transition.md 등).
 
 ## 프로젝트 구조
 ```
-app/          FastAPI 앱 (main.py, config.py, routers/, services/, templates/)
-ml/           모델 학습·평가·EDA (eda.ipynb 등)
-scripts/      데이터 수집·파싱·통합 스크립트
-data/         raw/ (원본 JSON), processed/ (zones_dataset.csv), images/ (CV용)
-tests/        pytest
+app/        FastAPI 앱: main.py, config.py, database.py, models.py, schemas.py,
+            rate_limit.py, request_log.py, routers/(predict,detect,analyze), services/, templates/
+ml/         모델·분석: dataset_pairs.py, train_final.py, evaluate.py, heatmap_model.py,
+            features.py, compare_algos.py, analyze_patterns.py ...
+scripts/    데이터 수집·파싱·통합·부하테스트: collect_batch, build_dataset, load_dataset, run_pipeline ...
+data/       raw/(원본 JSON, gitignore), processed/(zones_dataset.csv, 커밋됨), images/, maps/
+alembic/    DB 마이그레이션
+tests/      pytest
 ```
 
-## 로컬 실행
+## 로컬 실행 (빠른 시작)
+`data/processed/zones_dataset.csv`가 저장소에 포함되어 있어, **PUBG 키 없이도** 모델 학습 후 바로
+띄울 수 있다(이미지·히트맵 경로 동작). matchId 예측만 PUBG API 키가 필요하다.
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env 설정 (PUBG_API_KEY 등)
+pip install -r requirements.txt          # 전체 개발 의존성
 
-# 데이터 수집 → 파싱 → 통합
-python scripts/collect_batch.py 50
-python scripts/build_dataset.py
-
-# 전체 파이프라인 한 번에 (통합 → 통계 → 평가)
-python scripts/run_pipeline.py
-
-# 서버 실행
-uvicorn app.main:app --reload   # http://127.0.0.1:8000/health
+python ml/train_final.py                 # 번들 CSV로 예측 모델(ml/models/predictor.joblib) 생성
+uvicorn app.main:app --reload            # http://127.0.0.1:8000  (웹 UI / /docs)
 ```
 
-## 데이터셋 & 베이스라인 결과 (v0.2 시점)
-- 데이터: 고유 매치 20개 → 정제 후 138 phase 행
-- 맵별 분포: Sanhok 45, Erangel 39, Taego 30, Miramar 13, Rondo 6, Karakin 5
-- 베이스라인 오차(다음 원 중심, 매치 단위 train16/test4): 평균 5.4m / 중앙값 0.5m / p90 10.9m
-- 단계별: phase 1~4 ≈0.2~0.5m, phase 6~7 ≈14~28m
-- 주의: 오차가 작은 것은 예측 대상(다음 원)이 이미 발표된 값이고 초반이 동심원이기 때문.
-  상세·한계는 `friday/raw/memories/baseline_eval.md` 참고. Week 3 모델의 비교 기준선.
+### matchId 예측까지 쓰려면 (PUBG API)
+```bash
+cp .env.example .env    # 파일이 없으면 아래 값을 담아 .env 생성
+#   PUBG_API_KEY=...     PUBG_SHARD=steam(또는 kakao)     PUBG_PLAYER_NAME=(선택)
+```
+
+### 데이터를 직접 더 모으려면
+```bash
+python scripts/collect_batch.py 300      # 텔레메트리 수집(중복 자동 스킵)
+python scripts/build_dataset.py          # data/raw → data/processed/zones_dataset.csv
+python ml/train_final.py                 # 모델 재학습(반드시 build 후)
+```
+
+### DB(요청 로깅)까지 쓰려면 (선택, Docker 필요)
+```bash
+docker compose up -d db                  # 로컬 Postgres
+alembic upgrade head                     # 테이블 생성
+# .env의 DATABASE_URL=postgresql://pubg:pubg@localhost:5432/pubg_zone
+```
+
+### 컨테이너로 실행
+```bash
+docker build -t godeye . && docker run --rm -p 8000:8000 --env-file .env godeye
+# 또는 앱+DB 함께: docker compose up --build
+```
+
+## 배포
+Railway(Docker) + Postgres. 단계별 안내는 `DEPLOY.md`. Render 대안은 `render.yaml`.
+이미지 빌드 시 `train_final.py`로 모델을 생성해 라이브러리 버전 불일치를 방지한다.
+
+## 데이터셋 현황 (참고)
+- 현재 약 162매치 → 전환쌍(학습 표본) ~1,000개. 맵: Erangel/Taego 다수 + Miramar/Sanhok/Vikendi 등.
+- 단계 전환 예측 오차(중심, m): copy 159 / baseline 160 / RF 167 (중심은 무작위성 큼).
+- 히트맵: 균등분포 대비 로그가능도 +2.0, coverage 50/80/90%에 근접(잘 보정됨).
+- 필요 매치 수 가이드: 초·중반 반경/히트맵은 현재로 충분, 후반까지 신뢰하려면 500~800매치,
+  맵별 정밀화는 1,000매치+ (memories의 분석 문서 참고).
+
+## 테스트
+```bash
+pytest -q     # 환경에 따라 모델/이미지 의존 테스트는 skip
+```
 
 ## 진행 로그
 ### Week 1 (07-21 ~ 07-27) — 셋업 + 텔레메트리 수집 [v0.1]
@@ -104,3 +135,13 @@ uvicorn app.main:app --reload   # http://127.0.0.1:8000/health
 - Day 33 (08-22): 레이트리밋(rate_limit.py, 데코레이터) + 요청 로깅(request_log.py, request_logs)
 - Day 34 (08-23): E2E 3시나리오 테스트(test_e2e.py), 검출 실패 시 모델 로드 지연 수정
 - Day 35 (08-24): UI 다듬기(로딩/버튼/429), README·발표개요, 주간 회고 [v0.5]
+- (실험) 히트맵 예측(heatmap_model.py, /api/heatmap, 프론트 토글), 알고리즘 비교(RF/LGBM/XGB),
+  특징 공학(features.py). 사진 보정 4클릭·자동감지(map_detect.py). model_algo_feature_experiment.md 등 기록
+
+### Week 6 (08-25 ~ 08-31) — 배포·모니터링·문서화
+- Day 36 (08-25): 프로덕션 Dockerfile(경량 런타임 + 빌드 시 모델 학습), requirements-runtime.txt, .dockerignore, compose app 서비스. docker build/run 성공
+- Day 37 (08-26): Railway 배포(start.sh $PORT, DEPLOY.md, render.yaml). 배포 URL /health 200
+- Day 38 (08-27): DB 연결(DATABASE_URL 참조) + 마이그레이션 + request_logs 적재. postgres:// 보정
+- Day 39 (08-28): UptimeRobot /health 모니터, scripts/load_test.py 부하 테스트
+- Day 40 (08-29): 보안/안정성(시크릿 점검, 레이트리밋·에러 재확인, /health DB핑+connect_timeout)
+- Day 41 (08-30): 문서화 — README 완성. (발표자료·회고는 로드맵 확장 이후로 보류)
