@@ -22,7 +22,9 @@ COPY data/processed/ ./data/processed/
 # 컨테이너의 sklearn 버전으로 예측 모델을 빌드 시 생성(버전 불일치 방지)
 RUN python ml/train_final.py
 
+# 시작 스크립트(마이그레이션 + $PORT 바인딩)
+COPY start.sh .
+RUN chmod +x start.sh
+
 EXPOSE 8000
-# 프로덕션: gunicorn(worker manager) + uvicorn worker
-CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", \
-     "-w", "2", "-b", "0.0.0.0:8000", "app.main:app"]
+CMD ["./start.sh"]

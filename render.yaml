@@ -1,0 +1,26 @@
+# Render Blueprint (대안). Render 대시보드에서 이 저장소를 Blueprint로 배포하면
+# 웹 서비스 + Postgres를 함께 생성한다. (Railway를 쓰면 이 파일은 무시)
+services:
+  - type: web
+    name: godeye
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PUBG_API_KEY
+        sync: false          # 대시보드에서 직접 입력(시크릿)
+      - key: PUBG_SHARD
+        value: steam
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: godeye-db
+          property: connectionString
+
+databases:
+  - name: godeye-db
+    plan: free
