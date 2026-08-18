@@ -22,12 +22,19 @@ def build_transition_pairs(df: pd.DataFrame) -> pd.DataFrame:
     for match_id, g in df.groupby("match_id"):
         g = g.sort_values("phase")
         recs = g.to_dict("records")
-        for cur, nxt in zip(recs[:-1], recs[1:]):
+        for i, (cur, nxt) in enumerate(zip(recs[:-1], recs[1:])):
             # 인접 단계만(중간에 phase가 비면 건너뜀)
             if int(nxt["phase"]) != int(cur["phase"]) + 1:
                 continue
             if cur["safety_radius"] <= 0:
                 continue
+            # 모멘텀: 직전 단계 → 현재 단계로의 이동(이전 궤적). 첫 단계면 0.
+            if i > 0:
+                prev = recs[i - 1]
+                prev_dx = cur["safety_x"] - prev["safety_x"]
+                prev_dy = cur["safety_y"] - prev["safety_y"]
+            else:
+                prev_dx = prev_dy = 0.0
             rows.append({
                 "match_id": match_id,
                 "map": cur["map"],
@@ -35,6 +42,8 @@ def build_transition_pairs(df: pd.DataFrame) -> pd.DataFrame:
                 "safety_y": cur["safety_y"],
                 "safety_radius": cur["safety_radius"],
                 "phase": int(cur["phase"]),
+                "prev_dx": prev_dx,
+                "prev_dy": prev_dy,
                 "dx": nxt["safety_x"] - cur["safety_x"],
                 "dy": nxt["safety_y"] - cur["safety_y"],
                 "next_radius": nxt["safety_radius"],

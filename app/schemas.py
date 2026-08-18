@@ -4,7 +4,13 @@ Pydantic 요청/응답 스키마 (Day 10).
 FastAPI는 이 스키마로 (1) 입력 검증, (2) 응답 형태 고정, (3) Swagger 문서 자동 생성을 한다.
 아직 실제 로직은 없고, 예측/검출 엔드포인트가 주고받을 데이터의 "형태"만 정의한다.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class _Base(BaseModel):
+    # 'model_name' 등 model_ 접두 필드가 Pydantic v2 예약 네임스페이스와 충돌하는
+    # 경고를 끈다(동작에는 영향 없음).
+    model_config = ConfigDict(protected_namespaces=())
 
 
 # ---------- 공통 ----------
@@ -21,7 +27,7 @@ class PredictRequest(BaseModel):
     match_id: str = Field(..., description="PUBG 매치 ID")
 
 
-class PredictResponse(BaseModel):
+class PredictResponse(_Base):
     match_id: str
     phase: int = Field(..., description="예측 기준이 된 현재 단계")
     predicted: Circle = Field(..., description="예측된 다음 자기장(중심·반경)")

@@ -28,15 +28,18 @@ services:
       timeout: 3s
       retries: 5
 
-  # --- Week 6 배포 단계에서 활성화 (Dockerfile 작성 후) ---
-  # app:
-  #   build: .
-  #   env_file: .env
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #   ports:
-  #     - "8000:8000"
+  # 앱 서비스 (Week 6): Dockerfile로 빌드해 DB와 함께 띄운다.
+  app:
+    build: .
+    env_file: .env
+    environment:
+      # 컨테이너 내부에서 DB는 서비스명 db로 접속(로컬 5432 아님)
+      DATABASE_URL: postgresql://pubg:pubg@db:5432/pubg_zone
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
 
 volumes:
   pgdata:

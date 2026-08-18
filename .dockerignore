@@ -1,0 +1,20 @@
+# 빌드 컨텍스트에서 제외(이미지 경량화·보안)
+.venv/
+venv/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+tests/
+friday/
+ml/figures/
+ml/models/*.joblib
+data/raw/
+data/images/
+data/maps/
+*.md
+docker-compose.yml
+Dockerfile
+.dockerignore

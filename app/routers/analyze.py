@@ -179,3 +179,74 @@ async def analyze_visual(
         if any(k in str(e).lower() for k in ("predict", "joblib", "attribute")):
             raise HTTPException(status_code=503, detail=f"모델 로드 실패: {e}")
         raise HTTPException(status_code=500, detail=f"시각화 오류: {e}")
+
+
+@router.post("/detect-corners")
+@limiter.limit("30/minute")
+async def detect_corners(request: Request, image: UploadFile = File(...)):
+    """(자동 감지) 사진에서 지도 영역 4점을 추정해 반환. 사용자가 보정할 초기값."""
+    from app.services.map_detect import detect_map_corners
+    img = cv2.imdecode(np.frombuffer(await image.read(), np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        raise HTTPException(status_code=400, detail="이미지를 읽을 수 없습니다.")
+    pts = detect_map_corners(img)
+    return {"corners": [[round(x, 1), round(y, 1)] for x, y in pts]}
+
+
+class _NoPred:
+    """히트맵은 점 예측기가 필요 없으므로, current만 얻으려는 더미 예측기."""
+    def predict(self, *a, **k):
+        return {"x": 0.0, "y": 0.0, "radius": 0.0, "confidence_radius": 0.0}
+
+
+@router.post("/heatmap")
+@limiter.limit("30/minute")
+async def analyze_heatmap(
+    request: Request,
+    match_id: str | None = Form(None),
+    image: UploadFile | None = File(None),
+    phase: int | None = Form(None),
+    map_name: str | None = Form(None),
+    manual_cx: float | None = Form(None),
+    manual_cy: float | None = Form(None),
+    manual_r: float | None = Form(None),
+    corners: str | None = Form(None),
+):
+    """(임시) 다음 원 중심 확률 히트맵을 지도 위에 얹은 PNG 반환. 점 예측기 불필요."""
+    try:
+        from app.services.heatmap_service import get_heatmap_model
+        base = None
+        stub = _NoPred()
+        if match_id:
+            res = pipeline.analyze_by_match_id(match_id, predictor=stub)
+        elif image is not None:
+            if phase is None or not map_name:
+                raise HTTPException(status_code=422, detail="phase와 map_name이 필요합니다.")
+            manual = None
+            if manual_cx is not None and manual_cy is not None and manual_r is not None:
+                manual = {"cx": manual_cx, "cy": manual_cy, "r": manual_r}
+            base, manual = _decode_and_warp(await image.read(), corners, manual)
+            res = pipeline.analyze_by_image(base, phase=phase, map_name=map_name,
+                                            manual_pixel=manual, predictor=stub)
+        else:
+            raise HTTPException(status_code=422, detail="match_id 또는 image를 제공하세요.")
+
+        if res["current"] is None:
+            raise HTTPException(status_code=422, detail="현재 원을 알 수 없음(수동 좌표 입력 필요).")
+
+        if base is None:
+            map_path = os.path.join(MAPS_DIR, f"{res['map'].lower()}.png")
+            base = cv2.imread(map_path)
+            if base is None:
+                base = visualize.blank_base()
+
+        png = visualize.draw_heatmap(base, res["current"], res["phase"],
+                                     res["map"], get_heatmap_model())
+        return Response(content=png, media_type="image/png")
+
+    except HTTPException:
+        raise
+    except MatchNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"히트맵 오류: {e}")

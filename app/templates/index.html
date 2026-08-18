@@ -62,8 +62,16 @@
           </div>
           <input name="corners" type="hidden">
           <div id="calib-box" class="d-none mt-2">
-            <p class="mb-1 small text-muted">아래 이미지에서 <b>지도의 네 모서리(파란 점)</b>를 실제 지도 꼭짓점으로 드래그하세요.</p>
-            <canvas id="calib-canvas" class="border rounded" style="max-width:100%; cursor:move;"></canvas>
+            <p class="mb-1 small text-muted">
+              지도 <b>네 꼭짓점을 순서대로 클릭</b>하세요:
+              <b>좌상 → 우상 → 우하 → 좌하</b>. 클릭 후 점을 드래그해 미세 보정도 가능합니다.
+            </p>
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="auto-corner">자동 감지(보조)</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="reset-corner">다시 찍기</button>
+              <span class="small text-muted" id="corner-status">0 / 4 지정됨</span>
+            </div>
+            <canvas id="calib-canvas" class="border rounded" style="max-width:100%; cursor:crosshair;"></canvas>
           </div>
         </div>
 
@@ -84,7 +92,13 @@
   </div>
 
   <!-- 결과 -->
-  <div id="result" class="mt-3"></div>
+  <div class="form-check mt-3">
+    <input class="form-check-input" type="checkbox" id="use-heatmap">
+    <label class="form-check-label" for="use-heatmap">
+      히트맵으로 보기 (다음 원 중심의 확률 분포 — 실험 기능)
+    </label>
+  </div>
+  <div id="result" class="mt-2"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -146,11 +160,13 @@ function readoutUpdate(){
   readout.textContent = center ? `중심(${Math.round(center.x*scale)}, ${Math.round(center.y*scale)}) 반경 ${Math.round(radius*scale)} px` : '아직 원을 지정하지 않음';
 }
 
-// ---- 사진 보정: 지도 네 모서리 드래그 ----
+// ---- 사진 보정: 지도 네 꼭짓점 4번 클릭 (+ 드래그 미세보정, 자동감지 보조) ----
 const useCorners = document.getElementById('use-corners');
 const calibBox = document.getElementById('calib-box');
 const calibCanvas = document.getElementById('calib-canvas');
-let cScale = 1, corners = null, dragCorner = -1;
+const cornerStatus = document.getElementById('corner-status');
+const LABELS = ['좌상(TL)','우상(TR)','우하(BR)','좌하(BL)'];
+let cScale = 1, corners = [], dragCorner = -1;
 
 useCorners.addEventListener('change', ()=>{
   calibBox.classList.toggle('d-none', !useCorners.checked);
@@ -165,32 +181,59 @@ function initCalib(){
   cScale = markImg.naturalWidth / dispW;
   calibCanvas.width = dispW;
   calibCanvas.height = markImg.naturalHeight / cScale;
-  const w = calibCanvas.width, h = calibCanvas.height, m = 0.12;
-  // 기본 모서리: 살짝 안쪽 (사용자가 지도 꼭짓점으로 옮김) 순서 TL,TR,BR,BL
-  corners = [{x:w*m,y:h*m},{x:w*(1-m),y:h*m},{x:w*(1-m),y:h*(1-m)},{x:w*m,y:h*(1-m)}];
+  corners = [];              // 클릭으로 하나씩 채운다
   drawCalib(); syncCorners();
 }
 function drawCalib(){
   const ctx = calibCanvas.getContext('2d');
   ctx.drawImage(markImg,0,0,calibCanvas.width,calibCanvas.height);
-  ctx.strokeStyle='#0d6efd'; ctx.lineWidth=2; ctx.beginPath();
-  corners.forEach((p,i)=> i? ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
-  ctx.closePath(); ctx.stroke();
-  const labels=['TL','TR','BR','BL'];
-  corners.forEach((p,i)=>{ ctx.fillStyle='#0d6efd'; ctx.beginPath(); ctx.arc(p.x,p.y,7,0,6.28); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.font='10px sans-serif'; ctx.fillText(labels[i],p.x-7,p.y-9); });
+  if (corners.length>1){
+    ctx.strokeStyle='#0d6efd'; ctx.lineWidth=2; ctx.beginPath();
+    corners.forEach((p,i)=> i? ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+    if (corners.length===4) ctx.closePath();
+    ctx.stroke();
+  }
+  corners.forEach((p,i)=>{
+    ctx.fillStyle='#0d6efd'; ctx.beginPath(); ctx.arc(p.x,p.y,7,0,6.28); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='10px sans-serif'; ctx.fillText(String(i+1),p.x-3,p.y+3);
+  });
+  const next = corners.length<4 ? ` — 다음: ${LABELS[corners.length]} 클릭` : ' — 완료';
+  cornerStatus.textContent = `${corners.length} / 4 지정됨${next}`;
 }
 function cpos(e){ const r=calibCanvas.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
+
 calibCanvas.addEventListener('mousedown', e=>{
-  const p=cpos(e); dragCorner=corners.findIndex(c=>Math.hypot(c.x-p.x,c.y-p.y)<14);
+  const p=cpos(e);
+  // 기존 점 근처면 드래그 보정, 아니면(4점 미만) 새 점 추가
+  const near = corners.findIndex(c=>Math.hypot(c.x-p.x,c.y-p.y)<14);
+  if (near>=0){ dragCorner=near; }
+  else if (corners.length<4){ corners.push(p); drawCalib(); syncCorners(); }
 });
 calibCanvas.addEventListener('mousemove', e=>{
   if(dragCorner<0) return; corners[dragCorner]=cpos(e); drawCalib(); syncCorners();
 });
 window.addEventListener('mouseup', ()=>{ dragCorner=-1; });
+
 function syncCorners(){
-  imageForm.corners.value = corners.map(p=>`${Math.round(p.x*cScale)},${Math.round(p.y*cScale)}`).join(';');
+  imageForm.corners.value = corners.length===4
+    ? corners.map(p=>`${Math.round(p.x*cScale)},${Math.round(p.y*cScale)}`).join(';')
+    : '';   // 4점 미만이면 보정 미적용(전체 이미지 기준)
 }
+
+document.getElementById('reset-corner').addEventListener('click', ()=>{ corners=[]; drawCalib(); syncCorners(); });
+
+// 자동 감지(보조): 서버 추정 4점을 채워 시작점으로. 이후 클릭/드래그로 보정.
+document.getElementById('auto-corner').addEventListener('click', async ()=>{
+  if(!fileInput.files[0] || !markImg){ alert('먼저 이미지를 선택하세요.'); return; }
+  const fd = new FormData(); fd.append('image', fileInput.files[0]);
+  try {
+    const r = await fetch('/api/detect-corners', {method:'POST', body: fd});
+    if(!r.ok) return;
+    const data = await r.json();
+    corners = data.corners.map(([x,y])=>({x:x/cScale, y:y/cScale}));
+    drawCalib(); syncCorners();
+  } catch(e){ /* 무시 */ }
+});
 function syncInputs(){
   const ok = center && radius > 3;
   submitBtn.disabled = !ok;
@@ -216,16 +259,21 @@ function render(res){
   `, 'border-primary');
 }
 
+const useHeatmap = document.getElementById('use-heatmap');
+
 async function showOverlay(form){
-  // 예측 성공 시 지도 오버레이 PNG를 받아 결과 아래에 표시
+  // 히트맵 토글이 켜져 있으면 /api/heatmap, 아니면 원 오버레이(/api/visualize)
+  const heat = useHeatmap.checked;
+  const endpoint = heat ? '/api/heatmap' : '/api/visualize';
+  const title = heat ? '다음 원 확률 히트맵' : '지도 오버레이';
   try {
-    const r = await fetch('/api/visualize', { method:'POST', body: new FormData(form) });
+    const r = await fetch(endpoint, { method:'POST', body: new FormData(form) });
     if (!r.ok) return;
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);
     resultEl.insertAdjacentHTML('beforeend',
-      card(`<h6>지도 오버레이</h6><img src="${url}" class="img-fluid rounded border">`, 'mt-2'));
-  } catch(e){ /* 오버레이 실패는 무시(결과 텍스트는 이미 표시됨) */ }
+      card(`<h6>${title}</h6><img src="${url}" class="img-fluid rounded border">`, 'mt-2'));
+  } catch(e){ /* 시각화 실패는 무시(결과 텍스트는 이미 표시됨) */ }
 }
 
 function setBusy(form, busy){
@@ -246,7 +294,8 @@ async function submit(form){
       return;
     }
     render(data);
-    if (data.predicted) showOverlay(form);   // 예측이 있으면 지도 오버레이도 표시
+    // 히트맵: 현재 원만 있으면 표시(점 예측 불필요). 원 오버레이: 예측이 있을 때.
+    if (useHeatmap.checked ? data.current : data.predicted) showOverlay(form);
   } catch(e){
     resultEl.innerHTML = card(`<div class="text-danger">요청 실패(네트워크): ${e}</div>`);
   } finally {

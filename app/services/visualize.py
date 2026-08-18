@@ -52,3 +52,34 @@ def draw_overlay(base_bgr, current_map, predicted_map, confidence_radius, map_na
 def blank_base(side=1024):
     """맵 이미지가 없을 때 쓰는 중립 배경(회색)."""
     return np.full((side, side, 3), 60, np.uint8)
+
+
+def draw_heatmap(base_bgr, current_map, phase, map_name, hmodel):
+    """
+    다음 원 중심의 확률 히트맵을 지도 위에 얹어 PNG로 반환 (임시 연결).
+    현재 원(청록)도 함께 그린다.
+    """
+    size = MAP_SIZES_CM[map_name]
+    img = base_bgr.copy()
+    h, w = img.shape[:2]
+    cx, cy, cr = current_map["x"], current_map["y"], current_map["radius"]
+
+    X, Y, D = hmodel.predict_grid(cx, cy, cr, int(phase), res=120)
+    Dn = D / (D.max() + 1e-9)
+
+    # 히트맵 색상화(JET) + 픽셀 bbox 계산
+    heat = cv2.applyColorMap((Dn * 255).astype(np.uint8), cv2.COLORMAP_JET)
+    x0 = max(0, int((cx - 1.2 * cr) / size * w)); x1 = min(w, int((cx + 1.2 * cr) / size * w))
+    y0 = max(0, int((cy - 1.2 * cr) / size * h)); y1 = min(h, int((cy + 1.2 * cr) / size * h))
+    if x1 > x0 and y1 > y0:
+        heat_r = cv2.resize(heat, (x1 - x0, y1 - y0))
+        alpha = cv2.resize((Dn * 0.6).astype(np.float32), (x1 - x0, y1 - y0))[..., None]
+        region = img[y0:y1, x0:x1].astype(np.float32)
+        img[y0:y1, x0:x1] = (region * (1 - alpha) + heat_r.astype(np.float32) * alpha).astype(np.uint8)
+
+    # 현재 원 테두리
+    t = max(2, w // 400)
+    cv2.circle(img, (int(cx / size * w), int(cy / size * h)), int(cr / size * w), CYAN, t)
+
+    ok, buf = cv2.imencode(".png", img)
+    return buf.tobytes()

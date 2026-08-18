@@ -1,0 +1,21 @@
+# 배포(서빙) 전용 런타임 의존성.
+# 실험/분석용(torch, lightgbm, xgboost, matplotlib, seaborn, pytest 등)은 제외해
+# 이미지를 가볍게 유지한다. (전체 개발 의존성은 requirements.txt)
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+gunicorn==22.0.0
+sqlalchemy==2.0.30
+alembic==1.13.1
+psycopg2-binary==2.9.9
+pydantic==2.7.1
+pandas==2.2.2
+numpy==1.26.4
+scipy==1.13.1
+scikit-learn==1.5.0
+joblib==1.4.2
+opencv-python-headless==4.10.0.84
+requests==2.32.3
+slowapi==0.1.9
+python-multipart==0.0.9
+jinja2==3.1.4
+python-dotenv==1.0.1
