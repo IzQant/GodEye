@@ -33,6 +33,41 @@ WHITE_BGR = (255, 255, 255)   # 현재 안전지대
 BLUE_BGR = (255, 130, 40)     # 다음 자기장
 FLIP_Y = False                # 맵 이미지의 y축이 반대면 True
 
+# 검출 학습용: 실제 스크린샷의 방해요소(격자·레드존·지명·마커·노이즈)를 넣어
+# 도메인 갭을 줄인다. (자기장 원은 이 위에 그려 라벨과 일치)
+ADD_DISTRACTORS = True
+DISTRACT_PROB = 0.8
+
+
+def add_distractors(img, rng):
+    """실제 미니맵 UI를 흉내낸 방해요소를 그려 넣는다(원은 나중에 위에 그림)."""
+    h, w = img.shape[:2]
+    # 좌표 격자
+    step = max(40, w // 8)
+    for x in range(step, w, step):
+        cv2.line(img, (x, 0), (x, h), (120, 120, 120), 1)
+    for y in range(step, h, step):
+        cv2.line(img, (0, y), (w, y), (120, 120, 120), 1)
+    # 레드존(방해: 빨간 채움 원) — 모델이 자기장 원과 혼동하지 않도록 학습
+    if rng.random() < 0.85:
+        rc = (int(rng.integers(0, w)), int(rng.integers(0, h)))
+        rr = int(rng.integers(w * 0.03, w * 0.09))
+        ov = img.copy()
+        cv2.circle(ov, rc, rr, (40, 40, 220), -1)
+        cv2.addWeighted(ov, 0.35, img, 0.65, 0, img)
+    # 지명 텍스트 흉내
+    for _ in range(int(rng.integers(3, 8))):
+        x, y = int(rng.integers(0, w)), int(rng.integers(20, h))
+        cv2.putText(img, "Zone", (x, y), cv2.FONT_HERSHEY_SIMPLEX,
+                    rng.uniform(0.35, 0.6), (230, 230, 230), 1, cv2.LINE_AA)
+    # 마커(노랑 점 = 핑/차량 등)
+    for _ in range(int(rng.integers(0, 3))):
+        x, y = int(rng.integers(0, w)), int(rng.integers(0, h))
+        cv2.circle(img, (x, y), max(3, w // 150), (0, 220, 255), -1)
+    # 촬영 노이즈
+    noise = rng.integers(-12, 12, img.shape, dtype=np.int16)
+    return np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+
 
 def map_to_px(coord_cm, size_cm, img_side, flip=False):
     p = coord_cm / size_cm * img_side
@@ -62,6 +97,8 @@ def main():
         return
 
     os.makedirs(OUT_DIR, exist_ok=True)
+    global rng_aug
+    rng_aug = np.random.default_rng(42)  # 증강 재현성
 
     # 재실행 시 이전 결과물(overlay_*.png)을 먼저 정리해 orphan 파일이 쌓이지 않게 한다.
     # (파일명이 match_id+phase 기반으로 고정이라 대부분 덮어써지지만, 맵 구성이 바뀐
@@ -86,6 +123,10 @@ def main():
         h, w = base.shape[:2]
         img = base.copy()
         thickness = max(2, w // 400)
+
+        # 방해요소 증강(원을 그리기 전에) — 검출 학습 도메인 갭 축소
+        if ADD_DISTRACTORS and rng_aug.random() < DISTRACT_PROB:
+            img = add_distractors(img, rng_aug)
 
         def to_px(x, y):
             return (int(map_to_px(x, size_cm, w)),
