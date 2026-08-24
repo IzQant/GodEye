@@ -250,7 +250,11 @@ function legendHtml(heat){ return heat
   : `<div class="legend"><span class="it"><span class="swatch" style="background:#fff"></span> 현재 원</span><span class="it"><span class="swatch" style="background:#4f8cff"></span> 예측 다음 원</span><span class="it"><span class="swatch" style="background:#e6c878"></span> 불확실성 범위</span></div>`; }
 function renderResult(res){
   const confM = res.confidence_radius==null?'-':`± ${num(res.confidence_radius/100)} m`;
-  $('result').innerHTML = `
+  const alignWarn = res.aligned===false
+    ? `<div class="notice">사진 자동 인식 실패 — 이미지 전체를 지도로 간주해 좌표가 부정확할 수 있습니다.<br>
+       <b>고해상도 원본 사진</b>을 사용하거나, 입력 화면에서 <b>지도 영역(4점)</b>을 직접 지정해 주세요.</div>`
+    : '';
+  $('result').innerHTML = alignWarn + `
     <div class="rcard">
       <div class="rhead"><span class="t">예측 결과</span><span class="chip chip-accent">${res.input_type}</span></div>
       <div class="grid">
