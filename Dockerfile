@@ -18,6 +18,8 @@ COPY ml/ ./ml/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
 COPY data/processed/ ./data/processed/
+# 참조 맵(특징점 자동 정렬 런타임 의존성)
+COPY data/maps/ ./data/maps/
 
 # 컨테이너의 sklearn 버전으로 예측 모델을 빌드 시 생성(버전 불일치 방지)
 RUN python ml/train_final.py

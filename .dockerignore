@@ -13,7 +13,6 @@ ml/figures/
 ml/models/*.joblib
 data/raw/
 data/images/
-data/maps/
 *.md
 docker-compose.yml
 Dockerfile

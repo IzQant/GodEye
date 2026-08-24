@@ -10,9 +10,9 @@ data/raw/*.json
 data/images/**/*.png
 data/images/**/*.jpg
 data/images/**/*.jpeg
-# 맵 이미지(저작물·대용량)도 제외
-data/maps/*.png
-data/maps/*.jpg
+# 참조 맵은 특징점 정렬의 '런타임 의존성'이라 배포에 포함한다
+# (개인 학습용 사용 — data/maps/README.md 참고)
+!data/maps/*.png
 
 *.joblib
 .pytest_cache/
