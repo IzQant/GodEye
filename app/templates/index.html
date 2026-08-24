@@ -44,7 +44,8 @@
     .btn-go{background:var(--gold2);border:none;color:#231400;font-weight:800;padding:11px 18px;cursor:pointer;width:100%;}
     .btn-go:disabled{opacity:.5;cursor:not-allowed;}
     .btn-ghost{background:#0a1836;border:1px solid var(--border);color:var(--text);padding:9px 16px;font-size:.85rem;cursor:pointer;}
-    canvas{max-width:100%;border:1px solid var(--border);background:#04091c;}
+    canvas{max-width:100%;border:1px solid var(--border);background:#04091c;touch-action:none;}
+    input[type=range]{width:100%;accent-color:var(--gold2);}
     .step{margin-top:16px;border-top:1px solid var(--border);padding-top:16px;}
     .step h4{font-size:.95rem;font-weight:700;margin:0 0 6px;color:var(--gold2);}
     .btnrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px;}
@@ -107,8 +108,8 @@
         <div class="step d-none" id="calib-box">
           <h4>지도 영역 지정</h4>
           <div class="hint" style="margin-bottom:8px;">
-            지도 <b>네 꼭짓점을 순서대로 클릭</b>: <b>좌상 → 우상 → 우하 → 좌하</b>. 점 드래그로 미세 보정.
-            <br>지도가 이미 화면을 꽉 채운 스크린샷이면 그냥 예측하세요(영역 지정 생략 가능).
+            <b>영역 지정은 선택사항입니다.</b> 그냥 예측하면 사진에서 지도를 <b>자동 인식</b>해 보정합니다(권장).
+            <br>자동 인식이 어긋날 때만 네 꼭짓점을 <b>좌상 → 우상 → 우하 → 좌하</b> 순서로 지정하세요.
           </div>
           <div class="btnrow" style="margin-top:0;margin-bottom:8px;">
             <button type="button" class="btn-ghost" id="auto-corner">자동 감지(보조)</button>
@@ -129,13 +130,17 @@
       <div class="notice" id="manual-msg"></div>
       <h4 style="font-size:.95rem;font-weight:700;margin:0 0 6px;color:var(--gold2);">현재 원 직접 표시</h4>
       <div class="hint" style="margin-bottom:8px;">
-        아래 이미지에서 <b>현재 흰 원의 중심을 누른 채 바깥으로 드래그</b>해 반경을 맞추세요.
+        현재 흰 원의 <b>중심을 탭(클릭)</b>한 뒤, 아래 <b>슬라이더로 반경</b>을 맞추세요.
       </div>
       <canvas id="mark-canvas" style="cursor:crosshair;"></canvas>
+      <div style="margin-top:10px;">
+        <label class="lbl">반경 조절</label>
+        <input id="radius-slider" type="range" min="4" max="800" value="60">
+      </div>
       <div class="btnrow">
         <button class="btn-go" style="width:auto;" id="manual-submit" disabled>표시한 원으로 예측</button>
         <button class="btn-ghost" id="manual-back">뒤로</button>
-        <span class="status" id="manual-readout">아직 원을 지정하지 않음</span>
+        <span class="status" id="manual-readout">중심을 탭한 뒤 슬라이더로 반경을 조절하세요</span>
       </div>
     </div></div>
   </div>
@@ -191,11 +196,13 @@ function drawCalib(){
   cornerStatus.textContent=`${corners.length} / 4 지정됨`+(corners.length<4?` — 다음: ${LABELS[corners.length]} 클릭`:' — 완료');
 }
 function cpos(e){ const r=calibCanvas.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
-calibCanvas.addEventListener('mousedown', e=>{ const p=cpos(e);
-  const near=corners.findIndex(c=>Math.hypot(c.x-p.x,c.y-p.y)<14);
-  if(near>=0) dragCorner=near; else if(corners.length<4){ corners.push(p); drawCalib(); syncCorners(); } });
-calibCanvas.addEventListener('mousemove', e=>{ if(dragCorner<0)return; corners[dragCorner]=cpos(e); drawCalib(); syncCorners(); });
-window.addEventListener('mouseup', ()=>{ dragCorner=-1; });
+calibCanvas.addEventListener('pointerdown', e=>{ e.preventDefault(); const p=cpos(e);
+  const near=corners.findIndex(c=>Math.hypot(c.x-p.x,c.y-p.y)<24);   // 터치 히트영역 확대
+  if(near>=0){ dragCorner=near; calibCanvas.setPointerCapture(e.pointerId); }
+  else if(corners.length<4){ corners.push(p); drawCalib(); syncCorners(); } });
+calibCanvas.addEventListener('pointermove', e=>{ if(dragCorner<0)return; e.preventDefault(); corners[dragCorner]=cpos(e); drawCalib(); syncCorners(); });
+calibCanvas.addEventListener('pointerup', ()=>{ dragCorner=-1; });
+calibCanvas.addEventListener('pointercancel', ()=>{ dragCorner=-1; });
 function syncCorners(){ cornersValue = corners.length===4 ? corners.map(p=>`${Math.round(p.x*cScale)},${Math.round(p.y*cScale)}`).join(';') : ''; }
 $('reset-corner').addEventListener('click', ()=>{ corners=[]; drawCalib(); syncCorners(); });
 $('auto-corner').addEventListener('click', async ()=>{
@@ -204,19 +211,22 @@ $('auto-corner').addEventListener('click', async ()=>{
     const d=await r.json(); corners=d.corners.map(([x,y])=>({x:x/cScale,y:y/cScale})); drawCalib(); syncCorners(); }catch(e){}
 });
 
-// ---- 수동 원 지정 ----
-const canvas=$('mark-canvas'), readout=$('manual-readout'), submitBtn=$('manual-submit');
+// ---- 수동 원 지정: 중심 탭 + 슬라이더 반경 (마우스/터치 공통) ----
+const canvas=$('mark-canvas'), readout=$('manual-readout'), submitBtn=$('manual-submit'), radiusSlider=$('radius-slider');
 function fitCanvas(){ const dispW=Math.min(markImg.naturalWidth,660); scale=markImg.naturalWidth/dispW;
-  canvas.width=dispW; canvas.height=markImg.naturalHeight/scale; redraw(); }
+  canvas.width=dispW; canvas.height=markImg.naturalHeight/scale;
+  center=null; radius=Math.round(dispW*0.08);
+  radiusSlider.max=Math.max(canvas.width,canvas.height); radiusSlider.value=radius;
+  redraw(); }
 function redraw(){ const ctx=canvas.getContext('2d'); ctx.drawImage(markImg,0,0,canvas.width,canvas.height);
   if(center){ ctx.strokeStyle='#ff5a6a'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(center.x,center.y,radius,0,6.28); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(center.x-6,center.y); ctx.lineTo(center.x+6,center.y);
     ctx.moveTo(center.x,center.y-6); ctx.lineTo(center.x,center.y+6); ctx.stroke(); } }
 function mpos(e){ const r=canvas.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
-canvas.addEventListener('mousedown', e=>{ if(!markImg)return; dragging=true; center=mpos(e); radius=0; redraw(); });
-canvas.addEventListener('mousemove', e=>{ if(!dragging)return; const p=mpos(e); radius=Math.hypot(p.x-center.x,p.y-center.y); redraw(); mReadout(); });
-window.addEventListener('mouseup', ()=>{ if(dragging){ dragging=false; submitBtn.disabled=!(center&&radius>3); } });
-function mReadout(){ readout.textContent = center?`중심(${Math.round(center.x*scale)}, ${Math.round(center.y*scale)}) 반경 ${Math.round(radius*scale)} px`:'아직 원을 지정하지 않음'; }
+function mUpdate(){ submitBtn.disabled = !(center && radius>3); mReadout(); }
+canvas.addEventListener('pointerdown', e=>{ if(!markImg)return; e.preventDefault(); center=mpos(e); redraw(); mUpdate(); });
+radiusSlider.addEventListener('input', ()=>{ radius=+radiusSlider.value; redraw(); mUpdate(); });
+function mReadout(){ readout.textContent = center?`중심(${Math.round(center.x*scale)}, ${Math.round(center.y*scale)}) 반경 ${Math.round(radius*scale)} px`:'중심을 탭한 뒤 슬라이더로 반경을 조절하세요'; }
 $('manual-back').addEventListener('click', ()=> showScreen('input'));
 $('manual-submit').addEventListener('click', ()=>{ runAnalyze(); });
 
@@ -284,7 +294,7 @@ async function runAnalyze(){
     }
     if(data.needs_manual && !data.predicted){
       $('manual-msg').textContent='자동 검출 실패: '+(data.reasons||[]).join(', ')+' → 현재 원을 직접 표시하세요.';
-      showScreen('manual'); if(markImg) fitCanvas(); submitBtn.disabled=true; center=null; radius=0; mReadout();
+      showScreen('manual'); if(markImg) fitCanvas(); mUpdate();
       return;
     }
     renderResult(data); preloadViews();

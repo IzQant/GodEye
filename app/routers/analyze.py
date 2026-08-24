@@ -44,19 +44,33 @@ def _parse_corners(corners: str | None):
     raise HTTPException(status_code=400, detail="corners 형식 오류(x1,y1;x2,y2;x3,y3;x4,y4)")
 
 
-def _decode_and_warp(data, corners, manual):
+def _decode_and_warp(data, corners, manual, map_name=None):
     """
-    업로드 바이트 → 이미지. corners가 있으면 원근 보정(정사각 전체지도)하고
-    manual 원좌표도 함께 보정 좌표로 변환. 반환: (image, manual_pixel|None)
+    업로드 바이트 → 이미지.
+    1) corners(수동 4점)가 있으면 그걸로 원근 보정.
+    2) 없고 map_name이 있으면 특징점 매칭 자동 정렬(map_align)을 시도.
+       성공 시 사진이 전체지도 정사각으로 보정됨. 실패 시 원본 유지(기존 폴백).
+    manual 원좌표는 어떤 보정이든 함께 변환. 반환: (image, manual_pixel|None)
     """
     img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
         raise HTTPException(status_code=400, detail="이미지를 읽을 수 없습니다(형식 확인).")
+
     pts = _parse_corners(corners)
     if pts is not None:
         img, M = perspective.warp_map(img, pts)
         if manual is not None:
             manual = perspective.warp_circle(M, manual["cx"], manual["cy"], manual["r"])
+        return img, manual
+
+    if map_name:
+        from app.services.map_align import align_photo_to_map
+        warped, H, info = align_photo_to_map(img, map_name)
+        print(f"[map_align] {map_name}: {info}")
+        if info.get("ok"):
+            if manual is not None:
+                manual = perspective.warp_circle(H, manual["cx"], manual["cy"], manual["r"])
+            return warped, manual
     return img, manual
 
 
@@ -104,7 +118,7 @@ async def analyze(
             if manual_cx is not None and manual_cy is not None and manual_r is not None:
                 manual = {"cx": manual_cx, "cy": manual_cy, "r": manual_r}
 
-            img, manual = _decode_and_warp(await image.read(), corners, manual)
+            img, manual = _decode_and_warp(await image.read(), corners, manual, map_name)
             res = pipeline.analyze_by_image(img, phase=phase, map_name=map_name,
                                             manual_pixel=manual)
             return _to_response(res)
@@ -150,7 +164,7 @@ async def analyze_visual(
             manual = None
             if manual_cx is not None and manual_cy is not None and manual_r is not None:
                 manual = {"cx": manual_cx, "cy": manual_cy, "r": manual_r}
-            base, manual = _decode_and_warp(await image.read(), corners, manual)
+            base, manual = _decode_and_warp(await image.read(), corners, manual, map_name)
             res = pipeline.analyze_by_image(base, phase=phase, map_name=map_name,
                                             manual_pixel=manual)
         else:
@@ -225,7 +239,7 @@ async def analyze_heatmap(
             manual = None
             if manual_cx is not None and manual_cy is not None and manual_r is not None:
                 manual = {"cx": manual_cx, "cy": manual_cy, "r": manual_r}
-            base, manual = _decode_and_warp(await image.read(), corners, manual)
+            base, manual = _decode_and_warp(await image.read(), corners, manual, map_name)
             res = pipeline.analyze_by_image(base, phase=phase, map_name=map_name,
                                             manual_pixel=manual, predictor=stub)
         else:
