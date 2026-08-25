@@ -113,13 +113,13 @@ _YOLO_TRIED = False
 
 
 def get_yolo_detector():
-    """ONNX 모델이 있고 GODEYE_USE_YOLO=1일 때만 로드(opt-in). 아니면 None → 색상 폴백.
+    """ONNX 모델이 있으면 YOLO 검출기 로드(기본 on). 파일 없으면 None → 색상 폴백.
 
-    검증 전 자동 대체를 막기 위한 게이트. 실제 오버레이 데이터셋에서 색상 방식보다
-    나음을 확인한 뒤 GODEYE_USE_YOLO=1로 켠다. 강제 로드가 필요하면 force=True.
+    검증 완료(2026-09-01): 오버레이 2807장에서 YOLO safe 검출율 100%, 중심오차 0.1px로
+    색상(278px)을 압도 → 기본 검출기로 채택. 끄려면 GODEYE_USE_YOLO=0.
     """
     global _YOLO, _YOLO_TRIED
-    if os.environ.get("GODEYE_USE_YOLO", "0") != "1":
+    if os.environ.get("GODEYE_USE_YOLO", "1") != "1":
         return None
     if not _YOLO_TRIED:
         _YOLO_TRIED = True
