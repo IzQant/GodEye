@@ -21,8 +21,11 @@ DATA = os.path.join(BASE, "data", "detect", "data.yaml")
 
 def main():
     # yolov8s: 정확도/속도 균형. RTX 5060(8GB)에서 imgsz 768, batch 16 정도 무난.
-    # VRAM 부족하면 batch를 8로, 더 가볍게는 yolov8n.pt 사용.
-    model = YOLO("yolov8s.pt")
+    # yolov8n(nano): 배포 메모리 제약(Railway 512MB)에서 yolov8s가 OOM → nano로 교체.
+    # 파라미터 ~1/4, ONNX ~12MB, 추론 메모리 대폭 감소. 우리 합성 검출 과제는 쉬워서
+    # nano로도 mAP 충분(compare_detectors로 확인). 정확도 더 필요하면 yolov8s.pt로 되돌리고
+    # 대신 Railway 메모리를 올린다.
+    model = YOLO("yolov8n.pt")
     model.train(
         data=DATA,
         epochs=100,
@@ -31,7 +34,7 @@ def main():
         device=0,          # GPU. CPU면 'cpu'
         patience=20,       # 조기 종료
         project=os.path.join(BASE, "runs"),
-        name="zone_detect",
+        name="zone_detect_n",
     )
     # 검증 지표(mAP 등) 출력
     metrics = model.val()

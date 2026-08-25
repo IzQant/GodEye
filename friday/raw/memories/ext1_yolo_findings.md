@@ -99,3 +99,21 @@ compare_detectors.py (오버레이 2807장):
   2) 로그 가시성: print에 flush=True 추가 + '[detector] 사용 검출기: XXX' 매 요청 로그 추가.
      → 배포에서 YoloCircleDetector/CircleDetector 중 뭘 쓰는지 즉시 확인 가능.
 - 검증(로컬): 변수 없으면 'YoloCircleDetector', =0이면 'CircleDetector' 로그 정상.
+
+
+## 512도 OOM 확정 → yolov8n(nano) 채택 (2026-09-01)
+- 로그 결정타: '[detector] 사용 검출기: YoloCircleDetector' 직후
+  'Worker was sent SIGKILL! Perhaps out of memory?' → 512로도 Railway 메모리 초과.
+  (변수 문제는 해결됨 = YOLO는 정상 작동, 순수 메모리 한계.)
+- 이제서야 nano가 정답: 검출 품질 아니라 메모리 문제라서.
+- 조치: train_yolo.py 베이스 yolov8s.pt → yolov8n.pt (name=zone_detect_n).
+  파라미터 ~1/4, ONNX ~44→~12MB, 추론 메모리 대폭↓ → 512MB 안에 들어갈 전망.
+  export/INPUT_SIZE는 512 유지. export_onnx.find_best가 최신 best.pt(nano) 자동 선택.
+- 대안 B: Railway 메모리 상향(코드 변경 없음). 정확도 최우선이면 s 유지+메모리 업.
+
+## 데스크탑 재학습 절차(nano)
+1. python ml/train_yolo.py            # yolov8n, runs/zone_detect_n*/weights/best.pt
+2. python ml/export_onnx.py           # → ml/models/zone_detect.onnx (512, nano)
+3. python ml/compare_detectors.py     # nano 검출율/오차 확인(safe ~100% 유지 기대)
+4. git add ml/models/zone_detect.onnx ml/train_yolo.py app/services/* → commit → push
+5. 재배포 후 로그: SIGKILL 없이 '[detector] 사용 검출기: YoloCircleDetector' + 결과 정상이면 완료.
