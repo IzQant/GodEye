@@ -48,3 +48,30 @@ compare_detectors.py (실제 오버레이 2807장):
 다음: 데스크탑에서 compare_detectors.py 재실행해 YOLO 검출율 확인.
 - 검출율이 ~85%+로 오르면: YOLO 채택(GODEYE_USE_YOLO=1), 색상/수동은 폴백.
 - 여전히 낮으면 confusion_matrix.png로 safe/next 혼동 확인 → 하이브리드(색상으로 클래스 재판정) 검토.
+
+
+## YOLO 채택 확정 (2026-09-01, conf 0.25 재측정)
+compare_detectors.py (오버레이 2807장):
+- 색상: safe 100%, next 2474/2807 | 중심오차 중앙 278px
+- YOLO(conf0.25): safe 2799/2807(100%), next 2330/2807(83%) | 중심오차 중앙 0.1px, 반경 0.0px
+→ 임계값 0.25로 recall 회복(46%→100%). YOLO 완승 → 기본 검출기로 채택.
+조치: get_yolo_detector 게이트 기본값 on(GODEYE_USE_YOLO 기본 "1").
+  ONNX 있으면 YOLO, 없으면 색상 폴백. 끄려면 GODEYE_USE_YOLO=0. 수동 폴백은 유지.
+배포: ml/models/zone_detect.onnx(44MB)를 git add/commit/push 해야 배포 컨테이너가 YOLO 사용.
+남은 확인: 실제 폰 촬영 사진(정렬 후)에서 YOLO 검출 동작(도메인 갭) 최종 점검.
+
+
+## 배포 OOM 확정 + imgsz 512 축소 (2026-09-01)
+- 증상: YOLO 배포 후 결과 안 나옴. GODEYE_USE_YOLO=0 시 정상(→색상으로 예측된 것).
+  즉 원인은 YOLO 메모리 OOM 확정(로드+추론 시 ~162MB 추가 → 512MB 컨테이너 초과).
+- 조치(재학습 불필요): INPUT_SIZE 768→512, export_onnx IMGSZ 768→512.
+  입력 해상도를 낮춰 활성 메모리·연산 대폭 감소.
+- 방어: pipeline.analyze_by_image에 try/except — YOLO 추론 예외 시 색상 폴백(결과 안 끊김).
+  512 코드 + 768 onnx 불일치도 폴백으로 안전(검증됨).
+- 사용자(데스크탑) 할 일:
+  1) python ml/export_onnx.py         # 이제 512로 재export → ml/models/zone_detect.onnx
+  2) python ml/compare_detectors.py   # 512에서도 정확도 유지되는지 확인(safe 검출율·오차)
+  3) git add ml/models/zone_detect.onnx app/services/yolo_detector.py ml/export_onnx.py
+     → commit → push
+  4) Railway 환경변수 GODEYE_USE_YOLO=0 삭제(또는 1)로 되돌려 YOLO 재활성 → 배포 테스트
+- 512로도 OOM이면: yolov8n(nano) 재학습 또는 Railway 메모리 상향.

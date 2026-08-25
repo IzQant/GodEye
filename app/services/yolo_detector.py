@@ -17,7 +17,9 @@ import numpy as np
 
 DEFAULT_MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..",
                                   "ml", "models", "zone_detect.onnx")
-INPUT_SIZE = 768          # 학습 imgsz와 동일해야 함
+INPUT_SIZE = 512          # ONNX export imgsz와 동일해야 함.
+                          # 배포 메모리 절감 위해 768→512(활성 메모리·연산 대폭 감소).
+                          # export_onnx.py의 IMGSZ와 반드시 일치시킬 것.
 CONF_THRESHOLD = 0.25     # 검출 신뢰도 임계값. 0.35→0.25로 낮춰 recall 회복
                           # (학습 recall 0.93인데 0.35에선 46%로 잘림)
 NMS_THRESHOLD = 0.45

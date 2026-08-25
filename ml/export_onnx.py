@@ -19,7 +19,7 @@ from ultralytics import YOLO
 
 BASE = os.path.dirname(os.path.dirname(__file__))
 OUT = os.path.join(BASE, "ml", "models", "zone_detect.onnx")
-IMGSZ = 768
+IMGSZ = 512   # 배포 메모리 절감(768→512). yolo_detector.INPUT_SIZE와 일치.
 
 
 def find_best():
