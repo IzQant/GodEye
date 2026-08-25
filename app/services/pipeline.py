@@ -23,8 +23,15 @@ from app.services.circle_detector import CircleDetector
 from app.services.coordinate_transform import full_map_affine
 from app.services.match_service import get_current_circle
 from app.services.model_service import get_predictor
+from app.services.yolo_detector import get_yolo_detector
 
 _detector = CircleDetector()
+
+
+def _get_detector():
+    """YOLO(ONNX) 모델이 있으면 우선 사용, 없으면 색상 기반으로 폴백.
+    둘 다 detect_with_confidence(image) 인터페이스가 동일하다."""
+    return get_yolo_detector() or _detector
 
 
 def build_result(input_type, map_name, phase, current, predicted,
@@ -74,7 +81,7 @@ def analyze_by_image(image, phase, map_name, manual_pixel=None, predictor=None):
     if manual_pixel is not None:
         pcx, pcy, pr = manual_pixel["cx"], manual_pixel["cy"], manual_pixel["r"]
     else:
-        res = _detector.detect_with_confidence(image)
+        res = _get_detector().detect_with_confidence(image)
         safe = res["safe"]
         if res["needs_manual"] or safe is None:
             # 검출 실패/저신뢰 → 예측 없이 수동 입력 요청 (모델 로드 불필요)
