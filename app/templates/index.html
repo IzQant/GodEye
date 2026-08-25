@@ -276,7 +276,11 @@ async function runAnalyze(){
       $('result').innerHTML = `<p class="err">오류 (${r.status}) — ${msg}</p>`; return;
     }
     if(data.needs_manual && !data.predicted){
-      $('manual-msg').textContent='자동 검출 실패: '+(data.reasons||[]).join(', ');
+      const al = data.aligned===false ? '지도 자동 인식 실패'
+               : data.aligned===true ? '지도 인식 성공' : '';
+      $('manual-msg').textContent = '자동 검출 실패'
+        + (al ? ` [${al}]` : '')
+        + (data.reasons&&data.reasons.length ? ' — '+data.reasons.join(', ') : '');
       showScreen('manual'); if(markImg) fitCanvas(); mUpdate();
       return;
     }
