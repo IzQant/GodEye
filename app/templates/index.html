@@ -138,9 +138,18 @@ let cScale=1, corners=[], cornersValue='', dragCorner=-1;
 
 fileInput.addEventListener('change', ()=>{
   const f=fileInput.files[0]; if(!f) return;
-  const img=new Image(); img.onload=()=>{ markImg=img; $('calib-box').style.display=''; initCalib(); }; img.src=URL.createObjectURL(f);
+  const img=new Image(); img.onload=()=>{ markImg=img; }; img.src=URL.createObjectURL(f);
   center=null; radius=0; corners=[]; cornersValue='';
+  $('calib-box').style.display='none';   // 영역 지정은 자동 인식 실패 시에만 노출
 });
+
+// 자동 인식 실패 시 복구 경로: 입력 화면으로 돌아가 영역 지정 열기
+function openCalib(){
+  showScreen('input');
+  $('calib-box').style.display='';
+  if(markImg) initCalib();
+  $('calib-box').scrollIntoView({behavior:'smooth', block:'start'});
+}
 
 // ---- 캔버스 공통 (모바일 대응) ----
 let dprK = 1;
@@ -226,11 +235,14 @@ function legendHtml(heat){ return heat
   : `<div class="legend"><span class="it"><span class="swatch" style="background:#fff"></span> 현재 원</span><span class="it"><span class="swatch" style="background:#4f8cff"></span> 예측 다음 원</span><span class="it"><span class="swatch" style="background:#e6c878"></span> 불확실성 범위</span></div>`; }
 function renderResult(res){
   const alignWarn = res.aligned===false
-    ? `<div class="notice">사진 자동 인식 실패 — 이미지 전체를 지도로 간주해 좌표가 부정확할 수 있습니다. 고해상도 원본 사진을 쓰거나 영역 지정을 사용하세요.</div>`
+    ? `<div class="notice">사진 자동 인식 실패 — 이미지 전체를 지도로 간주해 좌표가 부정확할 수 있습니다.<br>
+       <button type="button" class="btn-sub" id="open-calib" style="margin-top:8px;">영역 직접 지정하기</button></div>`
     : '';
   $('result').innerHTML = alignWarn + `
     <div class="rrow"><span class="k">MAP</span><span>${res.map ?? '-'}</span></div>
     <div class="rrow"><span class="k">PHASE</span><span>${res.phase ?? '-'}</span></div>`;
+  const oc = $('open-calib');
+  if (oc) oc.addEventListener('click', openCalib);
 }
 async function preloadViews(){
   const fetchBlob = url => fetch(url,{method:'POST',body:buildFD()}).then(r=>r.ok?r.blob():null).catch(()=>null);
