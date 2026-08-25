@@ -82,11 +82,12 @@ def analyze_by_image(image, phase, map_name, manual_pixel=None, predictor=None):
         pcx, pcy, pr = manual_pixel["cx"], manual_pixel["cy"], manual_pixel["r"]
     else:
         det = _get_detector()
+        print(f"[detector] 사용 검출기: {type(det).__name__}", flush=True)
         try:
             res = det.detect_with_confidence(image)
         except Exception as e:
             # YOLO 추론 실패(메모리/런타임 등) → 색상 방식으로 폴백해 결과가 끊기지 않게
-            print(f"[detector] {type(det).__name__} 실패 → 색상 폴백: {e}")
+            print(f"[detector] {type(det).__name__} 실패 → 색상 폴백: {e}", flush=True)
             res = _detector.detect_with_confidence(image)
         safe = res["safe"]
         if res["needs_manual"] or safe is None:

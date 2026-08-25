@@ -127,8 +127,8 @@ def get_yolo_detector():
         _YOLO_TRIED = True
         try:
             _YOLO = YoloCircleDetector()
-            print("[yolo_detector] ONNX 모델 로드 완료 (GODEYE_USE_YOLO=1)")
+            print("[yolo_detector] ONNX 모델 로드 완료 (YOLO 사용)", flush=True)
         except Exception as e:
-            print(f"[yolo_detector] 미사용(로드 실패/파일 없음): {e}")
+            print(f"[yolo_detector] 미사용(로드 실패/파일 없음): {e}", flush=True)
             _YOLO = None
     return _YOLO

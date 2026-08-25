@@ -87,3 +87,15 @@ compare_detectors.py (오버레이 2807장):
   다음 테스트에서 이 라벨로 정렬 문제인지 검출 문제인지 즉시 구분 가능.
 - 후속: 정렬 실패면 → 사진 해상도/각도 문제(정렬 강건화). 정렬 성공인데 검출 실패면
   → YOLO 도메인 갭(실제 스크린샷 소량 라벨링 미세조정이 진짜 해법, nano 아님).
+
+
+## 로그에 yolo 없음 → 게이트 변수 잔존 유력 (2026-09-01)
+- 배포 로그에 [yolo_detector]/[detector] 줄이 전혀 없음.
+- 유력 원인: Railway Variables에 GODEYE_USE_YOLO=0 이 아직 남아 있음(디버깅 때 넣은 것).
+  → 코드가 YOLO 로드 전에 건너뜀 → 색상 검출기 사용 → 실사진 검출 실패 → 수동.
+  '정렬 성공 + 검출 실패 + yolo 로그 없음' 증상과 정확히 일치.
+- 조치:
+  1) Railway Variables에서 GODEYE_USE_YOLO 삭제(코드 기본값 on). 재배포 후 테스트.
+  2) 로그 가시성: print에 flush=True 추가 + '[detector] 사용 검출기: XXX' 매 요청 로그 추가.
+     → 배포에서 YoloCircleDetector/CircleDetector 중 뭘 쓰는지 즉시 확인 가능.
+- 검증(로컬): 변수 없으면 'YoloCircleDetector', =0이면 'CircleDetector' 로그 정상.
