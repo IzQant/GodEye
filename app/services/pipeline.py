@@ -103,5 +103,13 @@ def analyze_by_image(image, phase, map_name, manual_pixel=None, predictor=None):
     cur_map = transform.apply_circle(pcx, pcy, pr)   # {x, y, radius}
     predicted, conf = _predict(predictor, cur_map["x"], cur_map["y"],
                                cur_map["radius"], phase, map_name)
+    try:
+        from app.services.coordinate_transform import MAP_SIZES_CM
+        s = MAP_SIZES_CM.get(map_name, 1)
+        print(f"[predict] 현재({cur_map['x']/s*100:.0f}%,{cur_map['y']/s*100:.0f}%) "
+              f"→ 예측({predicted['x']/s*100:.0f}%,{predicted['y']/s*100:.0f}%) "
+              f"r {predicted['radius']/s*100:.0f}%", flush=True)
+    except Exception:
+        pass
     return build_result("image", map_name, phase, cur_map, predicted, conf,
                         pixel={"cx": pcx, "cy": pcy, "r": pr})
