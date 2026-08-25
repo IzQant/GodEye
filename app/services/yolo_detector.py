@@ -18,7 +18,8 @@ import numpy as np
 DEFAULT_MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..",
                                   "ml", "models", "zone_detect.onnx")
 INPUT_SIZE = 768          # 학습 imgsz와 동일해야 함
-CONF_THRESHOLD = 0.35     # 검출 신뢰도 임계값(이하면 수동 폴백)
+CONF_THRESHOLD = 0.25     # 검출 신뢰도 임계값. 0.35→0.25로 낮춰 recall 회복
+                          # (학습 recall 0.93인데 0.35에선 46%로 잘림)
 NMS_THRESHOLD = 0.45
 CLASS_NAMES = {0: "safe", 1: "next"}
 
@@ -70,23 +71,22 @@ class YoloCircleDetector:
         out = self.net.forward()
         dets = decode_yolov8(out, self.conf_threshold)
 
-        # NMS (클래스 무관 일괄 → 클래스별 최고점만 쓸 것이므로 충분)
-        if dets:
-            boxes = [[d[0] - d[2] / 2, d[1] - d[3] / 2, d[2], d[3]] for d in dets]
-            scores = [d[4] for d in dets]
+        # 클래스별 NMS: safe·next 원은 서로 겹치므로(초반 단계) 클래스 무관 NMS를 쓰면
+        # 두 클래스가 하나로 합쳐져 한쪽이 사라진다. 반드시 클래스별로 따로 억제.
+        best = {}
+        for ci in (0, 1):
+            cd = [d for d in dets if d[5] == ci]
+            if not cd:
+                continue
+            boxes = [[d[0] - d[2] / 2, d[1] - d[3] / 2, d[2], d[3]] for d in cd]
+            scores = [d[4] for d in cd]
             idx = cv2.dnn.NMSBoxes(boxes, scores, self.conf_threshold, NMS_THRESHOLD)
             idx = np.array(idx).ravel().tolist() if len(idx) else []
-            dets = [dets[i] for i in idx]
-
-        # 클래스별 최고 점수 박스 → 원(원본 좌표계로 역변환)
-        best = {}
-        for cx, cy, w, h, sc, ci in dets:
-            if ci not in best or sc > best[ci]["confidence"]:
-                ox = (cx - px) / s
-                oy = (cy - py) / s
-                r = ((w / s) + (h / s)) / 4      # 외접 정사각형 → 반경
-                best[ci] = {"cx": float(ox), "cy": float(oy), "r": float(r),
-                            "confidence": float(sc)}
+            if not idx:
+                continue
+            cx, cy, w, h, sc, _ = max((cd[i] for i in idx), key=lambda d: d[4])
+            best[ci] = {"cx": float((cx - px) / s), "cy": float((cy - py) / s),
+                        "r": float(((w / s) + (h / s)) / 4), "confidence": float(sc)}
         return best
 
     def detect_circles(self, image):
@@ -113,13 +113,19 @@ _YOLO_TRIED = False
 
 
 def get_yolo_detector():
-    """ONNX 모델이 있으면 로드해 재사용, 없으면 None (호출부에서 색상 방식 폴백)."""
+    """ONNX 모델이 있고 GODEYE_USE_YOLO=1일 때만 로드(opt-in). 아니면 None → 색상 폴백.
+
+    검증 전 자동 대체를 막기 위한 게이트. 실제 오버레이 데이터셋에서 색상 방식보다
+    나음을 확인한 뒤 GODEYE_USE_YOLO=1로 켠다. 강제 로드가 필요하면 force=True.
+    """
     global _YOLO, _YOLO_TRIED
+    if os.environ.get("GODEYE_USE_YOLO", "0") != "1":
+        return None
     if not _YOLO_TRIED:
         _YOLO_TRIED = True
         try:
             _YOLO = YoloCircleDetector()
-            print("[yolo_detector] ONNX 모델 로드 완료")
+            print("[yolo_detector] ONNX 모델 로드 완료 (GODEYE_USE_YOLO=1)")
         except Exception as e:
             print(f"[yolo_detector] 미사용(로드 실패/파일 없음): {e}")
             _YOLO = None
