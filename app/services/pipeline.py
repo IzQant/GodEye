@@ -30,8 +30,20 @@ _detector = CircleDetector()
 
 def _get_detector():
     """YOLO(ONNX) 모델이 있으면 우선 사용, 없으면 색상 기반으로 폴백.
-    둘 다 detect_with_confidence(image) 인터페이스가 동일하다."""
+    둘 다 detect_with_confidence(image, min_radius_frac) 인터페이스가 동일하다."""
     return get_yolo_detector() or _detector
+
+
+# 단계별 현재 자기장 반경(맵 크기 대비 %)의 관측 최소값 근처.
+# 정렬된 이미지는 전체 맵이므로 이미지 폭 대비 반경과 맵 대비 반경이 ~같다.
+# 아래 값의 40%를 최소 반경 필터로 써서 나침반 등 작은 UI 원 오검출을 막는다.
+_PHASE_MIN_RFRAC = {1: 23, 2: 13, 3: 7.8, 4: 4.7, 5: 3.0,
+                    6: 1.7, 7: 1.0, 8: 0.6, 9: 0.1, 10: 0.05}
+
+
+def _min_radius_frac(phase):
+    base = _PHASE_MIN_RFRAC.get(int(phase), 0.0) if phase else 0.0
+    return base * 0.4 / 100.0   # % → 비율, 여유 40%
 
 
 def build_result(input_type, map_name, phase, current, predicted,
@@ -82,9 +94,10 @@ def analyze_by_image(image, phase, map_name, manual_pixel=None, predictor=None):
         pcx, pcy, pr = manual_pixel["cx"], manual_pixel["cy"], manual_pixel["r"]
     else:
         det = _get_detector()
-        print(f"[detector] 사용 검출기: {type(det).__name__}", flush=True)
+        mrf = _min_radius_frac(phase)
+        print(f"[detector] 사용 검출기: {type(det).__name__} (min_r_frac={mrf:.3f})", flush=True)
         try:
-            res = det.detect_with_confidence(image)
+            res = det.detect_with_confidence(image, min_radius_frac=mrf)
         except Exception as e:
             # YOLO 추론 실패(메모리/런타임 등) → 색상 방식으로 폴백해 결과가 끊기지 않게
             print(f"[detector] {type(det).__name__} 실패 → 색상 폴백: {e}", flush=True)

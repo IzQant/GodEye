@@ -65,13 +65,16 @@ class YoloCircleDetector:
         self.net = cv2.dnn.readNetFromONNX(model_path)
         self.conf_threshold = conf_threshold
 
-    def _infer(self, image):
+    def _infer(self, image, min_radius_frac=0.0):
         blob_img, s, px, py = letterbox(image, INPUT_SIZE)
         blob = cv2.dnn.blobFromImage(blob_img, 1 / 255.0, (INPUT_SIZE, INPUT_SIZE),
                                      swapRB=True, crop=False)
         self.net.setInput(blob)
         out = self.net.forward()
         dets = decode_yolov8(out, self.conf_threshold)
+
+        img_w = image.shape[1]
+        min_r_px = min_radius_frac * img_w   # 원본 픽셀 기준 최소 반경
 
         # 클래스별 NMS: safe·next 원은 서로 겹치므로(초반 단계) 클래스 무관 NMS를 쓰면
         # 두 클래스가 하나로 합쳐져 한쪽이 사라진다. 반드시 클래스별로 따로 억제.
@@ -86,18 +89,26 @@ class YoloCircleDetector:
             idx = np.array(idx).ravel().tolist() if len(idx) else []
             if not idx:
                 continue
-            cx, cy, w, h, sc, _ = max((cd[i] for i in idx), key=lambda d: d[4])
+            cands = [cd[i] for i in idx]
+            # 단계별 최소 반경 필터(safe만): 나침반 등 작은 UI 원 오검출 제거.
+            # 필터 후보가 없으면(후기 단계 등) 원래 후보 유지(과필터 방지).
+            if ci == 0 and min_r_px > 0:
+                filt = [d for d in cands if ((d[2] / s) + (d[3] / s)) / 4 >= min_r_px]
+                if filt:
+                    cands = filt
+            cx, cy, w, h, sc, _ = max(cands, key=lambda d: d[4])
             best[ci] = {"cx": float((cx - px) / s), "cy": float((cy - py) / s),
                         "r": float(((w / s) + (h / s)) / 4), "confidence": float(sc)}
         return best
 
-    def detect_circles(self, image):
-        best = self._infer(image)
+    def detect_circles(self, image, min_radius_frac=0.0):
+        best = self._infer(image, min_radius_frac)
         return {"safe": best.get(0), "next": best.get(1)}
 
-    def detect_with_confidence(self, image):
-        """CircleDetector와 동일 인터페이스. safe 미검출/저신뢰 시 needs_manual."""
-        det = self.detect_circles(image)
+    def detect_with_confidence(self, image, min_radius_frac=0.0):
+        """CircleDetector와 동일 인터페이스. safe 미검출/저신뢰 시 needs_manual.
+        min_radius_frac: 이미지 폭 대비 최소 반경(단계별 기대치). UI 원 오검출 방지."""
+        det = self.detect_circles(image, min_radius_frac or 0.0)
         reasons = []
         for key, label in (("safe", "흰 원"), ("next", "파란 원")):
             c = det[key]

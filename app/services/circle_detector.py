@@ -64,11 +64,12 @@ class CircleDetector:
         return {"safe": self.detect_circle(white_mask),
                 "next": self.detect_circle(blue_mask)}
 
-    def detect_with_confidence(self, image):
+    def detect_with_confidence(self, image, min_radius_frac=None):
         """
         검출 + 신뢰도 판정 + 폴백 분기.
         흰/파란 중 하나라도 검출 실패거나 신뢰도가 임계값 미만이면 needs_manual=True.
         반환: {'safe', 'next', 'needs_manual', 'reasons'}
+        (min_radius_frac: YOLO 검출기와 인터페이스 호환용. 색상 검출기는 사용하지 않음)
         """
         det = self.detect_circles(image)
         reasons = []
