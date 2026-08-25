@@ -180,24 +180,42 @@ fileInput.addEventListener('change', ()=>{
   center=null; radius=0; corners=[]; cornersValue='';
 });
 
+// ---- 캔버스 공통 (모바일 대응 핵심) ----
+// [방법2] 내부 해상도를 '실제 표시 폭 × devicePixelRatio'로 맞춰 CSS 축소 자체를 없애고,
+// [방법1] 좌표는 표시↔내부 배율을 곱해 변환 → 어떤 화면 크기에서도 탭 위치가 정확.
+let dprK = 1;
+function sizeCanvas(cv, maxW){
+  const wrapW = cv.parentElement.clientWidth || maxW;
+  const dispW = Math.max(200, Math.min(wrapW, maxW));        // 표시 폭 = 컨테이너에 맞춤
+  dprK = window.devicePixelRatio || 1;
+  cv.style.width = dispW + 'px';                              // 표시 크기 명시(축소 불일치 제거)
+  cv.width  = Math.round(dispW * dprK);                       // 내부 = 표시 × DPR(선명)
+  cv.height = Math.round(dispW * markImg.naturalHeight / markImg.naturalWidth * dprK);
+}
+function canvasPos(e, cv){                                    // 표시픽셀 → 내부픽셀 정규화
+  const r = cv.getBoundingClientRect();
+  return { x:(e.clientX-r.left)*cv.width/r.width, y:(e.clientY-r.top)*cv.height/r.height };
+}
+
 // ---- 보정(4클릭) ----
 const calibCanvas=$('calib-canvas'), cornerStatus=$('corner-status');
 const LABELS=['좌상(TL)','우상(TR)','우하(BR)','좌하(BL)'];
 function initCalib(){
-  const dispW=Math.min(markImg.naturalWidth,720); cScale=markImg.naturalWidth/dispW;
-  calibCanvas.width=dispW; calibCanvas.height=markImg.naturalHeight/cScale; corners=[]; drawCalib(); syncCorners();
+  sizeCanvas(calibCanvas, 720);
+  cScale=markImg.naturalWidth/calibCanvas.width;              // 내부픽셀 → 원본픽셀
+  corners=[]; drawCalib(); syncCorners();
 }
 function drawCalib(){
   const ctx=calibCanvas.getContext('2d'); ctx.drawImage(markImg,0,0,calibCanvas.width,calibCanvas.height);
-  if(corners.length>1){ ctx.strokeStyle='#FFC349'; ctx.lineWidth=2; ctx.beginPath();
+  if(corners.length>1){ ctx.strokeStyle='#FFC349'; ctx.lineWidth=2*dprK; ctx.beginPath();
     corners.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); if(corners.length===4)ctx.closePath(); ctx.stroke(); }
-  corners.forEach((p,i)=>{ ctx.fillStyle='#FFC349'; ctx.beginPath(); ctx.arc(p.x,p.y,7,0,6.28); ctx.fill();
-    ctx.fillStyle='#231400'; ctx.font='bold 10px sans-serif'; ctx.fillText(String(i+1),p.x-3,p.y+3); });
+  corners.forEach((p,i)=>{ ctx.fillStyle='#FFC349'; ctx.beginPath(); ctx.arc(p.x,p.y,8*dprK,0,6.28); ctx.fill();
+    ctx.fillStyle='#231400'; ctx.font=`bold ${10*dprK}px sans-serif`; ctx.fillText(String(i+1),p.x-3*dprK,p.y+3*dprK); });
   cornerStatus.textContent=`${corners.length} / 4 지정됨`+(corners.length<4?` — 다음: ${LABELS[corners.length]} 클릭`:' — 완료');
 }
-function cpos(e){ const r=calibCanvas.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
+function cpos(e){ return canvasPos(e, calibCanvas); }
 calibCanvas.addEventListener('pointerdown', e=>{ e.preventDefault(); const p=cpos(e);
-  const near=corners.findIndex(c=>Math.hypot(c.x-p.x,c.y-p.y)<24);   // 터치 히트영역 확대
+  const near=corners.findIndex(c=>Math.hypot(c.x-p.x,c.y-p.y)<26*dprK);   // 터치 히트영역(표시 26px)
   if(near>=0){ dragCorner=near; calibCanvas.setPointerCapture(e.pointerId); }
   else if(corners.length<4){ corners.push(p); drawCalib(); syncCorners(); } });
 calibCanvas.addEventListener('pointermove', e=>{ if(dragCorner<0)return; e.preventDefault(); corners[dragCorner]=cpos(e); drawCalib(); syncCorners(); });
@@ -213,16 +231,16 @@ $('auto-corner').addEventListener('click', async ()=>{
 
 // ---- 수동 원 지정: 중심 탭 + 슬라이더 반경 (마우스/터치 공통) ----
 const canvas=$('mark-canvas'), readout=$('manual-readout'), submitBtn=$('manual-submit'), radiusSlider=$('radius-slider');
-function fitCanvas(){ const dispW=Math.min(markImg.naturalWidth,660); scale=markImg.naturalWidth/dispW;
-  canvas.width=dispW; canvas.height=markImg.naturalHeight/scale;
-  center=null; radius=Math.round(dispW*0.08);
+function fitCanvas(){ sizeCanvas(canvas, 660);
+  scale=markImg.naturalWidth/canvas.width;                    // 내부픽셀 → 원본픽셀
+  center=null; radius=Math.round(canvas.width*0.08);
   radiusSlider.max=Math.max(canvas.width,canvas.height); radiusSlider.value=radius;
   redraw(); }
 function redraw(){ const ctx=canvas.getContext('2d'); ctx.drawImage(markImg,0,0,canvas.width,canvas.height);
-  if(center){ ctx.strokeStyle='#ff5a6a'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(center.x,center.y,radius,0,6.28); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(center.x-6,center.y); ctx.lineTo(center.x+6,center.y);
-    ctx.moveTo(center.x,center.y-6); ctx.lineTo(center.x,center.y+6); ctx.stroke(); } }
-function mpos(e){ const r=canvas.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
+  if(center){ ctx.strokeStyle='#ff5a6a'; ctx.lineWidth=2*dprK; ctx.beginPath(); ctx.arc(center.x,center.y,radius,0,6.28); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(center.x-6*dprK,center.y); ctx.lineTo(center.x+6*dprK,center.y);
+    ctx.moveTo(center.x,center.y-6*dprK); ctx.lineTo(center.x,center.y+6*dprK); ctx.stroke(); } }
+function mpos(e){ return canvasPos(e, canvas); }
 function mUpdate(){ submitBtn.disabled = !(center && radius>3); mReadout(); }
 canvas.addEventListener('pointerdown', e=>{ if(!markImg)return; e.preventDefault(); center=mpos(e); redraw(); mUpdate(); });
 radiusSlider.addEventListener('input', ()=>{ radius=+radiusSlider.value; redraw(); mUpdate(); });
