@@ -67,12 +67,15 @@ def main():
     from app.services.circle_detector import CircleDetector
     evaluate("색상(HSV+Contour)", CircleDetector(), rows)
 
-    from app.services.yolo_detector import get_yolo_detector
-    y = get_yolo_detector()
+    # 게이트(GODEYE_USE_YOLO)와 무관하게 비교용으로 ONNX를 직접 로드한다.
+    from app.services.yolo_detector import YoloCircleDetector
+    try:
+        y = YoloCircleDetector()
+    except Exception as e:
+        y = None
+        print(f"[YOLO] ONNX 로드 실패 → 색상 방식만 평가: {e}")
     if y is not None:
         evaluate("YOLO(ONNX)", y, rows)
-    else:
-        print("[YOLO] ONNX 모델 없음 → 색상 방식만 평가. ml/export_onnx.py로 먼저 내보내세요.")
 
 
 if __name__ == "__main__":
