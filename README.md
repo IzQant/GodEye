@@ -75,12 +75,18 @@ docker build -t godeye . && docker run --rm -p 8000:8000 --env-file .env godeye
 Railway(Docker) + Postgres. 단계별 안내는 `DEPLOY.md`. Render 대안은 `render.yaml`.
 이미지 빌드 시 `train_final.py`로 모델을 생성해 라이브러리 버전 불일치를 방지한다.
 
-## 데이터셋 현황 (참고)
-- 현재 약 162매치 → 전환쌍(학습 표본) ~1,000개. 맵: Erangel/Taego 다수 + Miramar/Sanhok/Vikendi 등.
-- 단계 전환 예측 오차(중심, m): copy 159 / baseline 160 / RF 167 (중심은 무작위성 큼).
-- 히트맵: 균등분포 대비 로그가능도 +2.0, coverage 50/80/90%에 근접(잘 보정됨).
-- 필요 매치 수 가이드: 초·중반 반경/히트맵은 현재로 충분, 후반까지 신뢰하려면 500~800매치,
-  맵별 정밀화는 1,000매치+ (memories의 분석 문서 참고).
+## 데이터셋 현황 (2026-09-03 기준)
+- `zones_dataset.csv`: **369매치, 2,807개 단계 기록, 2,438개 단계 전환쌍**.
+- 맵별 매치: Erangel 131, Taego 126, Sanhok 36, Miramar 21, Vikendi 18,
+  Rondo 17, Karakin 11, Paramo 9.
+- 단계별 전환쌍: phase 1~3 각 369, phase 4 368, phase 5 351, phase 6 293,
+  phase 7 210, phase 8 108, phase 9 1. 후반 단계는 여전히 표본이 부족하다.
+- 현재 데이터 재평가 히트맵: coverage 50/80/90% 영역에서 실제 포함률 54.8/89.9/97.3%,
+  균등분포 대비 로그가능도 **+2.137**(잘 보정됐지만 다소 보수적).
+- 기존 단계 전환 중심 오차는 copy 159m / baseline 160m / RF 167m였으며,
+  369매치 전체를 반영한 점 예측 모델 재학습·재평가는 아직 필요하다.
+- 필요 매치 수 가이드: 후반 단계 신뢰도 확보는 전체 500~800매치,
+  맵별 전용 모델은 맵당 100~150매치 이상. 현재는 Erangel/Taego만 최소 기준에 진입했다.
 
 ## 테스트
 ```bash

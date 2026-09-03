@@ -109,6 +109,12 @@ class YoloCircleDetector:
         """CircleDetector와 동일 인터페이스. safe 미검출/저신뢰 시 needs_manual.
         min_radius_frac: 이미지 폭 대비 최소 반경(단계별 기대치). UI 원 오검출 방지."""
         det = self.detect_circles(image, min_radius_frac or 0.0)
+        if det.get("safe"):
+            print(f"[yolo] safe r_frac={det['safe']['r']/image.shape[1]:.3f} "
+                  f"conf={det['safe']['confidence']:.2f} (min_r_frac={min_radius_frac or 0:.3f})",
+                  flush=True)
+        else:
+            print("[yolo] safe 검출 없음", flush=True)
         reasons = []
         for key, label in (("safe", "흰 원"), ("next", "파란 원")):
             c = det[key]

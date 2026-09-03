@@ -117,3 +117,64 @@ compare_detectors.py (오버레이 2807장):
 3. python ml/compare_detectors.py     # nano 검출율/오차 확인(safe ~100% 유지 기대)
 4. git add ml/models/zone_detect.onnx ml/train_yolo.py app/services/* → commit → push
 5. 재배포 후 로그: SIGKILL 없이 '[detector] 사용 검출기: YoloCircleDetector' + 결과 정상이면 완료.
+
+
+## 히트맵 OOM 진단 + 프리빌드 (2026-09-01)
+- 로그: analyze/visualize/heatmap 3요청 모두 YOLO+정렬OK, SIGKILL 미표시.
+  단 heatmap 요청은 [detector]까지만 찍히고 로컬에서 뜨던 '[heatmap_service] 학습(1회)'가 없음
+  → 히트맵 KDE '요청 시점 학습'(pandas 로드+전환쌍+KDE 적합) 단계에서 메모리 스파이크로
+  OOM 추정(SIGKILL 줄은 캡처에서 잘림).
+- 조치: 히트맵 모델을 빌드 시점 생성으로 분리.
+  - ml/train_heatmap.py: HeatmapModel 학습 → ml/models/heatmap.joblib.
+  - heatmap_service: joblib 있으면 로드(가벼움), 없으면 폴백 학습.
+  - Dockerfile: RUN python ml/train_heatmap.py 추가(train_final 다음).
+  - .dockerignore가 *.joblib 제외해도 컨테이너 내 RUN으로 생성되므로 무관.
+- 검증(로컬): joblib 로드로 /api/heatmap 200 정상, 요청 시 학습 없음. 테스트 회귀 없음.
+
+## 남은 이슈: '결과 틀어짐' + 근본 메모리
+- 로그상 배포 검출기 = YoloCircleDetector(정렬 OK). '결과 틀어짐'의 구체 대상(현재원/예측원/크기)
+  과 nano 배포 여부 확인 필요.
+- 근본: 512MB 컨테이너에 SIFT정렬+YOLO+RF+KDE+큰 PNG가 몰려 상시 빠듯.
+  진짜 안정화는 Railway 메모리 ~1GB 상향(권장) 또는 계속 경량화(nano+프리빌드+SIFT 축소).
+
+
+## nano 배포: 검출·예측기 정상, 우하단 원은 나침반 UI 유력 (2026-09-01)
+- onnx=nano(12MB). 검출 정확: 현재원 맵좌표 x=23%,y=38%,r=12%(화면 좌상단과 일치).
+- 예측기 재빌드(샌드박스 sklearn) 후 실제 예측: 현재(23%,38%)→예측(22%,38%) 58m,
+  r 12%→6.7%. 완벽히 합리적. 여러 위치 스윕도 현재 위치를 잘 추종(우하단 쏠림 없음).
+  → 예측기·검출 모두 정상. '우하단 예측원'은 원본 스크린샷의 PUBG 나침반 UI(우하단 원형)
+    을 예측원으로 오인했을 가능성 유력. 실제 예측원은 현재원과 겹쳐 좌상단에 작게 그려짐.
+- 조치: pipeline에 '[predict] 현재%→예측% r%' 로그 추가 → 배포에서 예측 위치를 숫자로 확인.
+- 히트맵 여전히 안 나옴: nano 배포에 히트맵 프리빌드 커밋(train_heatmap.py/Dockerfile/
+  heatmap_service.py)이 안 들어갔을 가능성. 이 파일들 push + Docker 재빌드 필요.
+
+
+## 배포 onnx ≠ 워크스페이스 onnx 확정 (2026-09-01)
+- 배포 로그: [predict] 현재(81%,95%)→예측(81%,95%) r1% (+ 한 번 →(0%,0%)). 현재원 검출이
+  우하단 나침반 UI(r1%)로 잘못됨 → 예측·히트맵 다 그 위에서 계산돼 틀어짐(예측기는 정상).
+- 샌드박스(현재 워크스페이스 nano onnx)로 같은 사진 검출: 상위 후보 전부 (23%,38%) r11.7%
+  conf 0.97, 우하단 후보 없음 → 최종 (23%,38%) 정상. 정렬은 양쪽 inliers 155로 동일.
+  ∴ 같은 입력인데 검출이 다름 = 배포 onnx가 워크스페이스 onnx와 다름.
+- 결론: 배포에 이전(잘못된) nano가 올라가 있고, 올바른 nano가 커밋/푸시 안 됐거나
+  Railway가 옛 빌드 캐시. 조치: git status ml/models/zone_detect.onnx 확인 →
+  미커밋이면 add/commit/push, 커밋됐으면 Railway 최신커밋 재빌드(수동 Redeploy).
+- 히트맵: joblib 프리빌드 로드 성공(OOM 해결). 미표시는 검출 오류의 2차 증상 →
+  검출 바로잡히면 예측원+히트맵 동시 해결.
+
+
+## 우하단 오검출 = nano의 UI 원(나침반) 오검출 → 단계별 반경 필터 (2026-09-01)
+- OpenCV 버전(4.10) 재현 테스트: 샌드박스도 4.10에서 (23%,38%) 정상 → 버전 무관.
+  onnx도 git clean=배포와 동일. 그런데 배포는 (81%,95%,r1%)=나침반 오검출.
+  → nano가 실제 사진(특히 특정 사진)에서 작은 UI 원(나침반)을 자기장으로 오검출하는
+    '불안정성'이 원인으로 결론(약한 모델 특성).
+- 조치: 단계(phase)별 최소 반경 필터.
+  - zones_dataset 관측: 현재원 반경%는 phase1 23%…phase9 0.1%. 정렬 이미지는 전체맵이라
+    이미지폭 대비 반경 ≈ 맵 대비 반경.
+  - yolo_detector.detect_with_confidence(min_radius_frac): safe 후보 중 반경이 임계 미만인
+    것(나침반 r1%)을 제외하고 최고신뢰 선택. 필터 후 후보 없으면 원복(후기단계 과필터 방지).
+  - pipeline._min_radius_frac(phase)=관측최소*0.4. phase1→0.092(9.2%).
+  - circle_detector는 min_radius_frac 인자 무시(인터페이스 호환).
+- 검증: 실사진 여전히 (23%,38%) 정상. 단위테스트—나침반(고신뢰,작음) vs 실제원(저신뢰,큼)
+  에서 필터 ON이 실제원 선택. 테스트 17 pass.
+- push 대상: yolo_detector.py, pipeline.py, circle_detector.py. 재배포 후 로그
+  '[detector] ... min_r_frac=0.092' + '[predict] 현재(23%,38%)' 확인.
